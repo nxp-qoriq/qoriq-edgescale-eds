@@ -1,0 +1,19 @@
+EDGESCALE-EDS is a set of software agents running on device side which connects to cloud.
+
+The cloud service is located at http://portal.edgescale.org. With the dashboard, user should be able to manage devices and deploy container based applications.
+
+Please follow below instructions to build and deploy software images with LSDK tools.
+
+TO compile custom kernel for EDGESCALE with Flexbuild:
+$  make distclean -C build/linux/kernel/<arch>/output/linux-4.x (optional)        
+$  cp packages/apps/edgescale-eds/edgescale_demo_kernel.config packages/linux/linux/arch/arm64/configs
+$  flex-builder  -c linux  -a <arch>  -B fragment:edgescale_demo_kernel.config
+
+TO build EDGESCALE-EDS with Flexbuild:
+$ flex-builder -c edgescale-eds -a <arch>
+$ flex-builder -i merge-component -a <arch>
+
+Install LSDK into SD card:
+$ flex-installer -b build/images/bootpartition_<arch>  -r build/images/ubuntu_xenial_<arch>_rootfs.d  -d /dev/sdx
+
+EDGESCALE-EDS is not enabled by default in flexbuild, to enable it, change CONFIG_BUILD_EDGESCALE_EDS=n to y in flexbuild/configs/build_lsdk.cfg
