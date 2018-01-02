@@ -46,7 +46,7 @@ func InitAgent() error {
 	err = cli.Connect(&client.ConnectOptions{
 		Network:         "tcp",
 		Address:         "int.msg.edgescale.org:1883",
-		CleanSession:    true,
+		CleanSession:    false,
 		ClientID:        []byte(device_id),
 		CONNACKTimeout:  10,
 		PINGRESPTimeout: 10,
