@@ -1,0 +1,10 @@
+NXP Software Content Register
+
+--------------------------------------------------------------------------------
+
+Outgoing license: 	NXP EULA
+License file name: 	EULA.txt
+Description: 		Software agents running on devices for cloud communication.
+Origin: 		NXP Proprietary
+
+--------------------------------------------------------------------------------
