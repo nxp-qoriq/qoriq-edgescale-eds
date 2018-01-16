@@ -34,4 +34,7 @@ if [ $? -eq 0 ];then
 
     # starting kubelet
     ./k8s.sh
+
+    # starting mq-agent
+    start-stop-daemon --start --startas /usr/local/bin/mq-agent --name mq-agent -m --pidfile /var/run/mq-agent.pid -b
 fi
