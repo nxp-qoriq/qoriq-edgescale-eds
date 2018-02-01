@@ -1,0 +1,31 @@
+#####################################
+#
+# Copyright 2017-2018 NXP
+#
+#####################################
+
+#!/bin/bash
+
+dd if=/dev/mmcblk0 of=/tmp/ota-info bs=512 skip=129024 count=1
+updateStatus=`cat /tmp/ota-info | awk '{print $1}'`
+platform=`cat /tmp/ota-info | awk '{print $2}'`
+oldimageVersion=`cat /tmp/ota-info | awk '{print $3}'`
+newimageVersion=`cat /tmp/ota-info | awk '{print $4}'`
+solutionname=`cat /tmp/ota-info | awk '{print $5}'`
+mid=`cat /tmp/ota-info | awk '{print $6}'`
+
+if [ "$updateStatus"x == 0x ];then
+        exit 0
+fi
+
+if [ "$updateStatus"x == 2x ];then
+        oldimageVersion=$newimageVersion
+	deviceid=`hostname`
+	curl -X POST -H "Content-Type: application/json" https://fyel3fan97.execute-api.us-west-2.amazonaws.com/rest/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA complete"}'
+fi
+
+updateStatus=0
+
+echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $mid" > /tmp/ota-info
+dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
+
