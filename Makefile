@@ -11,7 +11,7 @@ GOROOT ?= $(HOME)/go
 GOPATH ?= $(HOME)/gopathdir
 GOFILE ?= go1.8.5.linux-amd64.tar.gz
 
-TARGETS := est-client mq-agent startup
+TARGETS := cert-agent mq-agent startup
 
 .PHONY: $(TARGETS) clean all install
 
