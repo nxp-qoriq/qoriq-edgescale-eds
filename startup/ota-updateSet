@@ -1,0 +1,42 @@
+#####################################
+#
+# Copyright 2017-2018 NXP
+#
+#####################################
+
+#!/bin/bash
+
+dd if=/dev/mmcblk0 of=/tmp/ota-info bs=512 skip=129024 count=1
+platform=`cat /tmp/ota-info | awk '{print $2}'`
+oldimageVersion=`cat /tmp/ota-info | awk '{print $3}'`
+solutionname=$1
+newimageVersion=$2
+mid=$3
+
+if [ ! $oldimageVersion ];then
+    oldimageVersion=0
+fi
+
+if [ "$platform"x == x ];then
+    echo "there is no platform information"
+        exit 1
+fi
+
+deviceid=`hostname`
+
+get_imageURL(){
+	api_result=`curl "https://fyel3fan97.execute-api.us-west-2.amazonaws.com/rest/devices/softwares?device_id=$deviceid&solution=$solutionname&version=$newimageVersion"`
+	imageURL=`echo $api_result | grep url | sed 's/\"//g' | sed 's/.*url:\(.*$\)/\1/' | awk -F "[,}]" '{print $1}' | sed 's/^[ \t]*//g'`
+}
+
+get_imageURL
+if [ $imageURL ];then
+	echo "have a new image version=$newimageVersion, machine will reboot and install it!!!!!!!!!!!!!!!!!!!!!!!!!"
+	curl -X POST -H "Content-Type: application/json" https://fyel3fan97.execute-api.us-west-2.amazonaws.com/rest/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA start"}'
+	updateStatus=8
+	echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $mid" > /tmp/ota-info
+	dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
+	reboot
+else
+	echo "could not get image,solution=$solutionname version=$newimageVersion"
+fi

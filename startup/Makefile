@@ -1,6 +1,6 @@
 #####################################
 #
-# Copyright 2017 NXP
+# Copyright 2017-2018 NXP
 #
 #####################################
 
@@ -13,6 +13,8 @@ install:
 	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/bin
 	sudo cp -r env.sh $(INSTALL_DIR)/usr/local/bin/
 	sudo cp -r startup.sh $(INSTALL_DIR)/usr/local/bin/
+	sudo cp -r ota-updateSet $(INSTALL_DIR)/usr/local/bin/
+	sudo cp -r ota-statuscheck $(INSTALL_DIR)/usr/local/bin/
 
 
 .PHONY: clean install
