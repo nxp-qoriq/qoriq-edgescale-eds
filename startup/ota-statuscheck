@@ -21,7 +21,7 @@ fi
 if [ "$updateStatus"x == 2x ];then
         oldimageVersion=$newimageVersion
 	deviceid=`hostname`
-	curl -X POST -H "Content-Type: application/json" https://fyel3fan97.execute-api.us-west-2.amazonaws.com/rest/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA complete"}'
+	curl -X POST -H "Content-Type: application/json" https://api.edgescale.org/public/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA complete"}'
 fi
 
 updateStatus=0
