@@ -6,7 +6,7 @@
 
 #!/bin/bash
 
-testserver="https://portal.edgescale.org"
+testserver="https://www.linux.org"
 ok=1
 
 curl -k --connect-timeout 10  $testserver >/dev/null 2>&1
