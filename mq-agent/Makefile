@@ -5,6 +5,7 @@ ARCH ?= arm64
 all:
 	go get github.com/sirupsen/logrus
 	go get github.com/yosssi/gmq/mqtt
+	go get bitbucket.org/bertimus9/systemstat
 	env GOOS=linux GOARCH=$(ARCH) go build --ldflags="-w -s" mq-agent.go
 
 clean:

@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"time"
+	"bitbucket.org/bertimus9/systemstat"
+	"strings"
 )
 
 var log = logrus.New()
@@ -27,9 +29,20 @@ type Msg struct {
 	Url      string `josn:"url"`
 }
 
+type SysStat struct {
+        Mem  systemstat.MemSample
+        LastCPUSample systemstat.CPUSample
+        CurCPUSample  systemstat.CPUSample
+        SysCPUAvg     systemstat.CPUAverage
+        sysCPUSampled  bool
+}
+
 type Status struct {
 	ID        string `json:"id"`
 	Timestamp string `json:"timestamp"`
+	CPUUsage string `json:"cpuusage"`
+	MemUsage string `json:"memusage"`
+	AppNumber string `json:"appnumber"`
 }
 
 func InitAgent() error {
@@ -80,10 +93,37 @@ func InitAgent() error {
 		return err
 	}
 
+	sysstat := SysStat{}
 	for {
+		var CPUUsedPct, MemUsedPct float64
+		sysstat.LastCPUSample = sysstat.CurCPUSample
+		sysstat.CurCPUSample = systemstat.GetCPUSample()
+		if !sysstat.sysCPUSampled {
+			sysstat.sysCPUSampled = true
+			continue
+		}
+		sysstat.SysCPUAvg = systemstat.GetCPUAverage(sysstat.LastCPUSample, sysstat.CurCPUSample)
+		CPUUsedPct = 100 - sysstat.SysCPUAvg.IdlePct
+
+		sysstat.Mem = systemstat.GetMemSample()
+		MemUsed := sysstat.Mem.MemTotal - sysstat.Mem.MemFree - sysstat.Mem.Cached - sysstat.Mem.Buffers
+		MemUsedPct = 100 * float64(MemUsed) / float64(sysstat.Mem.MemTotal)
+
+		Apps, err := exec.Command("bash", "-c", "docker ps -q | wc -l").Output()
+		if err != nil {
+			return err
+		}
+
+		CPUPct := fmt.Sprintf("%.1f%%", CPUUsedPct)
+		MemPct := fmt.Sprintf("%.1f%%", MemUsedPct)
+		AppNum := fmt.Sprintf("%s", Apps)
+		AppNum = strings.Replace(AppNum, "\n", "", -1)
 		status := Status{
 			ID:        device_id,
 			Timestamp: time.Now().Format(time.RFC3339),
+			CPUUsage: CPUPct,
+			MemUsage: MemPct,
+			AppNumber: AppNum,
 		}
 		b, _ := json.Marshal(status)
 
