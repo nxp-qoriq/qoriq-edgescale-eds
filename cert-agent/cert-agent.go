@@ -44,7 +44,7 @@ func Get_device_fqdn(device_id string) (string, error) {
 		Vendor   string `json:"vendor"`
 	}
 
-	url := fmt.Sprintf("https://api.edgescale.org/public/models?uid=%s", device_id)
+	url := fmt.Sprintf("https://api.edgescale.org/public/devices/type?uid=%s", device_id)
 	resp, err := http.Get(url)
 	if err != nil {
 		fmt.Println(err)
