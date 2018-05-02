@@ -14,11 +14,11 @@ newimageVersion=`cat /tmp/ota-info | awk '{print $4}'`
 solutionname=`cat /tmp/ota-info | awk '{print $5}'`
 mid=`cat /tmp/ota-info | awk '{print $6}'`
 
-if [ "$updateStatus"x == 0x ];then
+if [ "$updateStatus"x = 0x ];then
         exit 0
 fi
 
-if [ "$updateStatus"x == 2x ];then
+if [ "$updateStatus"x = 2x ];then
         oldimageVersion=$newimageVersion
 	deviceid=`hostname`
 	curl -X POST -H "Content-Type: application/json" https://api.edgescale.org/public/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA complete"}'
