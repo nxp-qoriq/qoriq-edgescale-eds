@@ -12,7 +12,7 @@ push_publicip() {
 	publicip=`curl -k https://checkip.amazonaws.com`
 
 	token=""
-	url="https://fyel3fan97.execute-api.us-west-2.amazonaws.com/rest/devices/all/position"
+	url="https://api.edgescale.org/public/devices/positions"
 	# Create curl body
 	body="{"ip": "$publicip", "device_name": "`hostname`"}"
 
