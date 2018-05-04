@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bitbucket.org/bertimus9/systemstat"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -9,9 +10,8 @@ import (
 	"github.com/yosssi/gmq/mqtt/client"
 	"os"
 	"os/exec"
-	"time"
-	"bitbucket.org/bertimus9/systemstat"
 	"strings"
+	"time"
 )
 
 var log = logrus.New()
@@ -30,18 +30,18 @@ type Msg struct {
 }
 
 type SysStat struct {
-        Mem  systemstat.MemSample
-        LastCPUSample systemstat.CPUSample
-        CurCPUSample  systemstat.CPUSample
-        SysCPUAvg     systemstat.CPUAverage
-        sysCPUSampled  bool
+	Mem           systemstat.MemSample
+	LastCPUSample systemstat.CPUSample
+	CurCPUSample  systemstat.CPUSample
+	SysCPUAvg     systemstat.CPUAverage
+	sysCPUSampled bool
 }
 
 type Status struct {
 	ID        string `json:"id"`
 	Timestamp string `json:"timestamp"`
-	CPUUsage string `json:"cpuusage"`
-	MemUsage string `json:"memusage"`
+	CPUUsage  string `json:"cpuusage"`
+	MemUsage  string `json:"memusage"`
 	AppNumber string `json:"appnumber"`
 	EsVersion string `json:"esversion"`
 }
@@ -49,7 +49,7 @@ type Status struct {
 func InitAgent() error {
 	cli := client.New(&client.Options{
 		ErrorHandler: func(err error) {
-			log.Println(err)
+			log.Println("MQTT Client: ", err)
 		},
 	})
 
@@ -81,9 +81,18 @@ func InitAgent() error {
 					log.Debug(string(message))
 					var m Msg
 					json.Unmarshal(message, &m)
-					if m.Action == "update_firmware" {
+					switch m.Action {
+					case "update_firmware":
 						log.Println("Update filmware: ", m.Solution, m.Version)
 						cmd := fmt.Sprintf("/usr/local/bin/ota-updateSet %s %s %d", m.Solution, m.Version, m.Mid)
+						exec.Command("bash", "-c", cmd).Output()
+					case "unenroll":
+						log.Println("Unenroll device certificate")
+						cmd := fmt.Sprintf("dd if=/dev/zero of=/dev/mmcblk0 bs=1M seek=62 count=1 && reboot")
+						exec.Command("bash", "-c", cmd).Output()
+					case "update_software":
+						log.Println("Update software: ", m.Solution, m.Version, m.Mid)
+						cmd := fmt.Sprintf("kill -s SIGUSR1 $(<'/var/run/puppetlabs/agent.pid')")
 						exec.Command("bash", "-c", cmd).Output()
 					}
 				},
@@ -129,8 +138,8 @@ func InitAgent() error {
 		status := Status{
 			ID:        device_id,
 			Timestamp: time.Now().Format(time.RFC3339),
-			CPUUsage: CPUPct,
-			MemUsage: MemPct,
+			CPUUsage:  CPUPct,
+			MemUsage:  MemPct,
 			AppNumber: AppNum,
 			EsVersion: EsVer,
 		}
@@ -178,7 +187,7 @@ func main() {
 	for {
 		err := InitAgent()
 		if err != nil {
-			log.Error(err)
+			log.Error("MQ-agent: ", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
