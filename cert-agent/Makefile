@@ -7,11 +7,20 @@
 INSTALL_DIR ?= /
 INSTALL ?= install
 
-ARCH := arm64
+SECURE_OBJ_PATH ?= /home/xiao/work/secure/secure_obj/securekey_lib/out/export
+OPENSSL_PATH ?= /home/xiao/work/secure/openssl
+OPTEE_CLIENT_EXPORT ?= /home/xiao/work/secure/optee_client/out/export/
+
+ARCH ?= arm64
+CROSS_COMPILE ?= aarch64-linux-gnu-
+CC := ${CROSS_COMPILE}gcc
+CGO_LDFLAGS += -L${SECURE_OBJ_PATH}/lib -L${OPENSSL_PATH} -L${OPTEE_CLIENT_EXPORT}/lib
+CGO_CFLAGS += -I${SECURE_OBJ_PATH}/include -I${OPENSSL_PATH}/include
+
 
 all:
 	go get github.com/laurentluce/est-client-go
-	env GOOS=linux GOARCH=${ARCH} go build --ldflags="-w -s" cert-agent.go
+	env CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}" go build --ldflags="-w -s" cert-agent.go
 
 clean:
 	rm -f cert-agent

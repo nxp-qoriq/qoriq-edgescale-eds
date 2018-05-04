@@ -8,24 +8,33 @@
 package main
 
 import (
+	"./pkg/openssl"
+	"./pkg/securekey"
 	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"flag"
 	"fmt"
 	"github.com/laurentluce/est-client-go"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
+
+type Config struct {
+	SecureLevel *int
+}
 
 type Token struct {
 	E_Token string `json:"e_token"`
@@ -36,6 +45,80 @@ type Challenge struct {
 	Challenge string `json:"challenge"`
 }
 
+var cfg Config
+
+func InitFlags() {
+	cfg.SecureLevel = flag.Int("s", 1, "security level 0-2")
+	flag.Parse()
+}
+
+func CreateCsr(priv crypto.PrivateKey, commonName string, country string, state string, city string, organization string, organizationalUnit string, emailAddress string) ([]byte, error) {
+	random := rand.Reader
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:         commonName,
+			Country:            []string{country},
+			Province:           []string{state},
+			Locality:           []string{city},
+			Organization:       []string{organization},
+			OrganizationalUnit: []string{organizationalUnit},
+		},
+		SignatureAlgorithm: x509.SHA256WithRSA,
+		//SignatureAlgorithm: x509.ECDSAWithSHA256,
+		EmailAddresses: []string{emailAddress},
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(random, &template, priv)
+	if err != nil {
+		return nil, err
+	}
+	block := pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	}
+	certPem := pem.EncodeToMemory(&block)
+
+	return certPem, nil
+}
+
+func LoadMfKey(key string) (crypto.PrivateKey, error) {
+	data, err := ioutil.ReadFile(key)
+	if err != nil {
+		return nil, err
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New("No valid key found")
+	}
+
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		privkey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err == nil {
+			size := privkey.N.BitLen()
+			cmd := fmt.Sprintf("sobj_app  -L -l %s | grep handle |awk '{print $4}' | xargs -i sobj_app -R -h {}", key)
+			exec.Command("bash", "-c", cmd).Run()
+			cmd = fmt.Sprintf("sobj_app -C -f %s -k rsa -o pair -s %d -l %s -i 0 -w %s", key, size, key, key)
+			exec.Command("bash", "-c", cmd).Run()
+		} else {
+			id, err := openssl.ParseSobjPrivateKey(block.Bytes)
+			if err != nil {
+				fmt.Println("No valid key found")
+				os.Exit(1)
+			}
+			fmt.Println("Load sobj private key, ID:", id)
+		}
+		eng := openssl.Sobj_Init()
+		priv, _ := eng.Sobj_Loadkey(key)
+		return priv, nil
+	default:
+		return nil, fmt.Errorf("Unsupported key type %q", block.Type)
+	}
+
+	return nil, nil
+}
+
 func Get_device_fqdn(device_id string) (string, error) {
 	type DeviceModel struct {
 		Model    string `json:"model"`
@@ -44,7 +127,7 @@ func Get_device_fqdn(device_id string) (string, error) {
 		Vendor   string `json:"vendor"`
 	}
 
-	url := fmt.Sprintf("https://api.edgescale.org/public/devices/type?uid=%s", device_id)
+	url := fmt.Sprintf("https://api.edgescale.org/public/models?uid=%s", device_id)
 	resp, err := http.Get(url)
 	if err != nil {
 		fmt.Println(err)
@@ -91,24 +174,57 @@ func phase2() (string, string) {
 		response  string
 		e_token   string
 		device_id string
+		fuid      string
 	)
 
-	fuid, _ := os.Hostname()
+	b, err := ioutil.ReadFile("/data/device-id.ini")
+	if err != nil {
+		fmt.Println("No FUID found in MMC card")
+	}
+	fuid = strings.Trim(string(b), "\n")
+
 	buf := make([]byte, 5)
 	rand.Read(buf)
 	msg := hex.EncodeToString(buf)
 
-	mf_key := "/etc/ssl/private/edgescale/private_keys/mf-private.pem"
+	mf_key := "/data/private_keys/mf-private.pem"
 
-	b, _ := ioutil.ReadFile(mf_key)
-	block, _ := pem.Decode(b)
-	priv, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
-	signed, err := priv.Sign(rand.Reader, Sha256Sum(msg), crypto.SHA256)
-	response, device_id = Get_challenge(signed, fuid, msg)
-	signed, err = priv.Sign(rand.Reader, Sha256Sum(response), crypto.SHA256)
-	e_token = Get_EToken(device_id, signed)
-	if err != nil {
-		os.Exit(1)
+	switch level := *cfg.SecureLevel; {
+	case level < 1:
+		b, _ := ioutil.ReadFile(mf_key)
+		block, _ := pem.Decode(b)
+		priv, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
+		signed, err := priv.Sign(rand.Reader, Sha256Sum(msg), crypto.SHA256)
+		response, device_id = Get_challenge(signed, fuid, msg)
+		signed, err = priv.Sign(rand.Reader, Sha256Sum(response), crypto.SHA256)
+		e_token = Get_EToken(device_id, signed)
+		if err != nil {
+			os.Exit(1)
+		}
+
+	case level == 1:
+		key, err := LoadMfKey(mf_key)
+		if err != nil {
+			fmt.Println("No Sobj privatekey Found")
+			os.Exit(1)
+		}
+		priv := key.(crypto.Signer)
+		signed, err := priv.Sign(rand.Reader, Sha256Sum(msg), crypto.SHA256)
+		response, device_id = Get_challenge(signed, fuid, msg)
+		signed, err = priv.Sign(rand.Reader, Sha256Sum(response), crypto.SHA256)
+		e_token = Get_EToken(device_id, signed)
+		if err != nil {
+			os.Exit(1)
+		}
+	case level == 2:
+		fuid, _ = sk.SK_fuid()
+		signed, err := sk.SK_sign(msg)
+		response, device_id = Get_challenge(signed, fuid, msg)
+		signed, err = sk.SK_sign(response)
+		e_token = Get_EToken(device_id, signed)
+		if err != nil {
+			os.Exit(1)
+		}
 	}
 
 	return device_id, e_token
@@ -180,20 +296,17 @@ func Get_challenge(signed interface{}, fuid string, msg string) (string, string)
 
 func main() {
 	var err error
-	cmd := "mkdir -p /etc/ssl/private/edgescale/{certs,private_keys}"
-	exec.Command("bash", "-c", cmd).Run()
+	InitFlags()
 
-	cmd = "dd  if=/dev/mmcblk0 of=/run/secure.bin  skip=62 bs=1M count=1 && mount -o loop /run/secure.bin /etc/ssl/private/edgescale/"
+	cmd := "dd  if=/dev/mmcblk0 of=/run/secure.bin  skip=62 bs=1M count=1 && sync && mount -o loop /run/secure.bin /data/"
 	err = exec.Command("bash", "-c", cmd).Run()
 	if err != nil {
-		fmt.Println(err)
+		cmd = "fsck.ext2 -yf /run/secure.bin || mkfs.ext2 /run/secure.bin && mount /run/secure.bin /data"
+		err = exec.Command("bash", "-c", cmd).Run()
 	}
 
-	cmd = "hostname -F /etc/ssl/private/edgescale/device-id.ini"
-	err = exec.Command("bash", "-c", cmd).Run()
-
-	dev_cert := fmt.Sprintf("/etc/ssl/private/edgescale/certs/edgescale.pem")
-	dev_key := fmt.Sprintf("/etc/ssl/private/edgescale/private_keys/edgescale.key")
+	dev_cert := fmt.Sprintf("/data/certs/edgescale.pem")
+	dev_key := fmt.Sprintf("/data/private_keys/edgescale.key")
 
 	b, err := ioutil.ReadFile(dev_cert)
 	if err != nil {
@@ -210,15 +323,18 @@ func main() {
 		}
 	}
 
-	fmt.Printf("starting Phase1\n")
+	fmt.Println("starting Phase1")
 	cmd = "/usr/local/bin/bootstrap-enroll"
 	err = exec.Command("bash", "-c", cmd).Run()
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	fmt.Printf("starting Phase2\n")
+	fmt.Println("starting Phase2")
 	device_id, e_token := phase2()
+	if err != nil {
+		panic(err)
+	}
 
 	country := "CN"
 	state := "China"
@@ -230,7 +346,7 @@ func main() {
 	serverCA, _ := ioutil.ReadFile("/tmp/rootCA.pem")
 
 	//E-EST certs
-	fmt.Printf("starting Phase3\n")
+	fmt.Println("starting Phase3")
 	client := est.Client{
 		URLPrefix:  "https://int.e-est.edgescale.org",
 		Username:   device_id,
@@ -245,12 +361,22 @@ func main() {
 	var device_fqdn string
 	device_fqdn, err = Get_device_fqdn(device_id)
 
-	fmt.Println("create PKCS10 request")
 	var (
 		priv []byte
 		csr  []byte
 	)
-	priv, csr, _ = est.CreateCsr(device_fqdn, country, state, city, organization, organizationalUnit, emailAddress)
+
+	switch level := *cfg.SecureLevel; {
+
+	case level < 1:
+		priv, csr, _ = est.CreateCsr(device_fqdn, country, state, city, organization, organizationalUnit, emailAddress)
+		ioutil.WriteFile(dev_key, priv, 0644)
+	case level < 2:
+		eng := openssl.Sobj_Init()
+		key := eng.Sobj_KeyGen(dev_key, 1)
+		csr, _ = CreateCsr(key, device_fqdn, country, state, city, organization, organizationalUnit, emailAddress)
+	}
+
 	fmt.Printf("Starting E-EST certificate Enrollment\n")
 	cert, err := client.SimpleReenroll(csr, b_cert, b_priv)
 	if err != nil {
@@ -258,9 +384,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	ioutil.WriteFile("/etc/ssl/private/edgescale/certs/estrootca.pem", caCerts, 0644)
+	ioutil.WriteFile("/data/certs/estrootca.pem", caCerts, 0644)
 	ioutil.WriteFile(dev_cert, cert, 0644)
-	ioutil.WriteFile(dev_key, priv, 0644)
 
 	cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", device_fqdn)
 	exec.Command("bash", "-c", cmd).Run()
