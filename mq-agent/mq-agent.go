@@ -43,6 +43,7 @@ type Status struct {
 	CPUUsage string `json:"cpuusage"`
 	MemUsage string `json:"memusage"`
 	AppNumber string `json:"appnumber"`
+	EsVersion string `json:"esversion"`
 }
 
 func InitAgent() error {
@@ -114,16 +115,24 @@ func InitAgent() error {
 			return err
 		}
 
+		Ver, err := exec.Command("bash", "-c", "cat /etc/edgescale-version").Output()
+		if err != nil {
+			return err
+		}
+
 		CPUPct := fmt.Sprintf("%.1f%%", CPUUsedPct)
 		MemPct := fmt.Sprintf("%.1f%%", MemUsedPct)
 		AppNum := fmt.Sprintf("%s", Apps)
 		AppNum = strings.Replace(AppNum, "\n", "", -1)
+		EsVer := fmt.Sprintf("%s", Ver)
+		EsVer = strings.Replace(EsVer, "\n", "", -1)
 		status := Status{
 			ID:        device_id,
 			Timestamp: time.Now().Format(time.RFC3339),
 			CPUUsage: CPUPct,
 			MemUsage: MemPct,
 			AppNumber: AppNum,
+			EsVersion: EsVer,
 		}
 		b, _ := json.Marshal(status)
 
