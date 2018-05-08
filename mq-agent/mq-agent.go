@@ -1,8 +1,17 @@
+/*
+ **********************************
+ *
+ * Copyright 2018 NXP
+ *
+ **********************************
+ */
+
 package main
 
 import (
 	"bitbucket.org/bertimus9/systemstat"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/sirupsen/logrus"
@@ -27,6 +36,7 @@ type Msg struct {
 	Version  string `json:"version"`
 	Action   string `josn:"action"`
 	Url      string `josn:"url"`
+	Type     string `josn:"type"`
 }
 
 type SysStat struct {
@@ -90,6 +100,9 @@ func InitAgent() error {
 						log.Println("Unenroll device certificate")
 						cmd := fmt.Sprintf("dd if=/dev/zero of=/dev/mmcblk0 bs=1M seek=62 count=1 && reboot")
 						exec.Command("bash", "-c", cmd).Output()
+					case "uploadlog":
+						log.Printf("upload %s log msg recvd", m.Type)
+						Action_uploadlog(cli, device_id, m)
 					case "update_software":
 						log.Println("Update software: ", m.Solution, m.Version, m.Mid)
 						cmd := fmt.Sprintf("kill -s SIGUSR1 $(<'/var/run/puppetlabs/agent.pid')")
@@ -126,7 +139,7 @@ func InitAgent() error {
 
 		Ver, err := exec.Command("bash", "-c", "cat /etc/edgescale-version").Output()
 		if err != nil {
-			return err
+			return errors.New("Error: read edgescale-version")
 		}
 
 		CPUPct := fmt.Sprintf("%.1f%%", CPUUsedPct)
