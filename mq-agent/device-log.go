@@ -40,7 +40,7 @@ func get_endpoint(logname string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	host := "https://api.edgescale.org/public"
+	host := "https://api.edgescale.org/v1"
 	_url := "/devices/logs/signer"
 
 	url := fmt.Sprintf("%s%s?device_id=%s&logname=%s", host, _url, device_id, logname)
