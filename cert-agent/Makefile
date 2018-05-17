@@ -7,14 +7,14 @@
 INSTALL_DIR ?= /
 INSTALL ?= install
 
-SECURE_OBJ_PATH ?= /home/xiao/work/secure/secure_obj/securekey_lib/out/export
-OPENSSL_PATH ?= /home/xiao/work/secure/openssl
-OPTEE_CLIENT_EXPORT ?= /home/xiao/work/secure/optee_client/out/export/
+SECURE_OBJ_PATH ?= $(shell pwd)/../../secure_obj/securekey_lib/out/export
+OPENSSL_PATH ?= $(shell pwd)/../../openssl
+OPTEE_CLIENT_EXPORT ?= $(shell pwd)/../../optee_client/out/libteec
 
 ARCH ?= arm64
 CROSS_COMPILE ?= aarch64-linux-gnu-
 CC := ${CROSS_COMPILE}gcc
-CGO_LDFLAGS += -L${SECURE_OBJ_PATH}/lib -L${OPENSSL_PATH} -L${OPTEE_CLIENT_EXPORT}/lib
+CGO_LDFLAGS += -L${SECURE_OBJ_PATH}/lib -L${OPENSSL_PATH} -L${OPTEE_CLIENT_EXPORT}
 CGO_CFLAGS += -I${SECURE_OBJ_PATH}/include -I${OPENSSL_PATH}/include
 
 
