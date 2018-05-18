@@ -34,6 +34,7 @@ import (
 
 type Config struct {
 	SecureLevel *int
+	Version     string
 }
 
 type Token struct {
@@ -127,8 +128,11 @@ func Get_device_fqdn(device_id string) (string, error) {
 		Vendor   string `json:"vendor"`
 	}
 
-	url := fmt.Sprintf("https://api.edgescale.org/public/devices/type?uid=%s", device_id)
-	resp, err := http.Get(url)
+	url := fmt.Sprintf("https://api.edgescale.org/v1/devices/type?uid=%s", device_id)
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Add("Accept", fmt.Sprintf("application/json; version=%s", cfg.Version))
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println(err)
 		return "", err
@@ -238,12 +242,13 @@ func Get_EToken(device_id string, signed interface{}) string {
 	case string:
 		sig = s
 	}
-	url := "https://api.edgescale.org/secure/enroll/token"
+	url := "https://api.edgescale.org/v1/enroll/token"
 
 	values := map[string]string{"sig": sig, "device_id": device_id}
 	jsonValue, _ := json.Marshal(values)
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
+	contentType := fmt.Sprintf("application/json; version=%s", cfg.Version)
+	resp, err := http.Post(url, contentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -269,12 +274,13 @@ func Get_challenge(signed interface{}, fuid string, msg string) (string, string)
 	case string:
 		sig = s
 	}
-	url := "https://api.edgescale.org/secure/enroll/challenge"
+	url := "https://api.edgescale.org/v1/enroll/challenge"
 
 	values := map[string]string{"fuid": fuid, "sig": sig, "msg": msg}
 	jsonValue, _ := json.Marshal(values)
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
+	contentType := fmt.Sprintf("application/json; version=%s", cfg.Version)
+	resp, err := http.Post(url, contentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -298,6 +304,9 @@ func main() {
 	var err error
 	InitFlags()
 
+	b, _ := ioutil.ReadFile("/etc/edgescale-version")
+	cfg.Version = strings.Trim(string(b), "\n")
+
 	cmd := "dd  if=/dev/mmcblk0 of=/run/secure.bin  skip=62 bs=1M count=1 && sync && mount -o loop /run/secure.bin /data/"
 	err = exec.Command("bash", "-c", cmd).Run()
 	if err != nil {
@@ -308,7 +317,7 @@ func main() {
 	dev_cert := fmt.Sprintf("/data/certs/edgescale.pem")
 	dev_key := fmt.Sprintf("/data/private_keys/edgescale.key")
 
-	b, err := ioutil.ReadFile(dev_cert)
+	b, err = ioutil.ReadFile(dev_cert)
 	if err != nil {
 		fmt.Println("No valid certificate found, starting 3 Phases Certificate Enrollment")
 	} else {
