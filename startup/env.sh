@@ -12,7 +12,7 @@ ok=1
 curl -k --connect-timeout 10  $testserver >/dev/null 2>&1
 if [ $? -ne 0 ];then
 	ok=0
-	ethlist=$(ifconfig -a|grep -e fm -e eth -e enp| cut -d" " -f1)
+	ethlist=$(ip -o link show|awk -F ":" '{print $2}'|sed 's/\ //g'|grep -ie fm -ie ^e)
 	for eth in $ethlist;do
 		ifconfig $eth down
 	done
@@ -22,7 +22,7 @@ if [ $? -ne 0 ];then
 		ifconfig $eth up;sleep 10
 	
 		if ethtool $eth|grep "Link detected: yes";then 
-			dhclient -r $eth; dhclient $eth;ifconfig $eth |grep  "inet addr:"
+			dhclient -r $eth; dhclient $eth; ip r |grep "default"
 			if [ $? -ne 0 ];then
 				ifconfig $eth down;continue
 			fi
@@ -38,7 +38,7 @@ if [ $? -ne 0 ];then
 fi
 if [ $ok -eq 1 ];then
 	echo "Setting time from $testserver"
-	curl -k $testserver >/dev/null 2>&1 && date -s "$(curl -k -s --head $testserver | grep ^Date: | sed 's/Date: //g')"
+	curl -k $testserver >/dev/null 2>&1 && date -s "$(curl -k -s --head $testserver | grep -i ^Date:|head -1 |cut -c 6-)"
 else 
 	echo "Using default time"
 	date -u
