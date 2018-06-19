@@ -310,7 +310,7 @@ func main() {
 	cmd := "dd  if=/dev/mmcblk0 of=/run/secure.bin  skip=62 bs=1M count=1 && sync && mount -o loop /run/secure.bin /data/"
 	err = exec.Command("bash", "-c", cmd).Run()
 	if err != nil {
-		cmd = "fsck.ext2 -yf /run/secure.bin || mkfs.ext2 /run/secure.bin && mount /run/secure.bin /data"
+		cmd = "fsck.ext2 -yf /run/secure.bin || mkfs.ext2 /run/secure.bin && mount /run/secure.bin /data && mkdir -p /data/{certs,private_keys}"
 		err = exec.Command("bash", "-c", cmd).Run()
 	}
 
@@ -380,7 +380,7 @@ func main() {
 	case level < 1:
 		priv, csr, _ = est.CreateCsr(device_fqdn, country, state, city, organization, organizationalUnit, emailAddress)
 		ioutil.WriteFile(dev_key, priv, 0644)
-	case level < 2:
+	case level < 3:
 		eng := openssl.Sobj_Init()
 		key := eng.Sobj_KeyGen(dev_key, 1)
 		csr, _ = CreateCsr(key, device_fqdn, country, state, city, organization, organizationalUnit, emailAddress)
