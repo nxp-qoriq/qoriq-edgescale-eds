@@ -1,6 +1,6 @@
 #####################################
 #
-# Copyright 2017 NXP
+# Copyright 2017, 2018 NXP
 #
 #####################################
 
@@ -16,11 +16,12 @@ CROSS_COMPILE ?= aarch64-linux-gnu-
 CC := ${CROSS_COMPILE}gcc
 CGO_LDFLAGS += -L${SECURE_OBJ_PATH}/lib -L${OPENSSL_PATH} -L${OPTEE_CLIENT_EXPORT}
 CGO_CFLAGS += -I${SECURE_OBJ_PATH}/include -I${OPENSSL_PATH}/include
+GOBUILDTAGS ?= default
 
 
 all:
 	go get github.com/laurentluce/est-client-go
-	env CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}" go build --ldflags="-w -s" cert-agent.go
+	env CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}" go build --ldflags="-w -s" --tags "${GOBUILDTAGS}"
 
 clean:
 	rm -f cert-agent
