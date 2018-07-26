@@ -1,3 +1,13 @@
+// +build secure
+
+/*
+ **********************************
+ *
+ * Copyright 2017, 2018 NXP
+ *
+ **********************************
+ */
+
 package sk
 
 /*
@@ -29,7 +39,7 @@ bool C_sk_fuid(char *out) {
         goto sk_get_fuid_fail;
     }
 
-    for (i =0; i < fuid_len; i++){
+    for (i = 0; i < fuid_len; i++){
         out += sprintf(out, "%02x", fuid[i]);
     }
     ret = 0;
@@ -37,6 +47,37 @@ bool C_sk_fuid(char *out) {
 sk_get_fuid_fail:
     free(fuid);
 fuid_malloc_fail:
+    return ret;
+}
+
+bool C_sk_oemid(char *out) {
+    uint8_t ret, i ;
+    uint8_t oem_id_len;
+    uint8_t *oem_id;
+
+	oem_id = (uint8_t *)malloc(32);
+	if (!oem_id) {
+	    printf("malloc failed\n");
+	    ret = -1;
+	    goto oem_id_malloc_fail;
+	}
+	memset((void *)oem_id, 0, 32);
+
+    if (sk_get_oemid(oem_id, &oem_id_len)) {
+        printf("sk_get_oemid failed\n");
+        ret = -1;
+        goto sk_get_oem_id_fail;
+    }
+
+    for (i = 0; i < oem_id_len; i++){
+        out += sprintf(out, "%02x", oem_id[i]);
+    }
+
+    ret = 0;
+
+sk_get_oem_id_fail:
+    free(oem_id);
+oem_id_malloc_fail:
     return ret;
 }
 
@@ -143,6 +184,20 @@ func SK_fuid() (string, error) {
 		return C.GoString(cfuid), nil
 	} else {
 		return "", errors.New("FUID read failed")
+	}
+}
+
+func SK_oemid() (string, error) {
+	buf := make([]byte, 128)
+	coemid := C.CString(string(buf))
+	defer C.free(unsafe.Pointer(coemid))
+
+	ret := C.C_sk_oemid(coemid)
+
+	if !ret {
+		return C.GoString(coemid), nil
+	} else {
+		return "", errors.New("OEMID read failed")
 	}
 }
 

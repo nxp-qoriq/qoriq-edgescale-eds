@@ -1,6 +1,6 @@
 #####################################
 #
-# Copyright 2017 NXP
+# Copyright 2017, 2018 NXP
 #
 #####################################
 
@@ -29,10 +29,6 @@ start-stop-daemon --start --startas /bin/tee-supplicant --name tee-supplicant -m
 if [ $? -eq 0 ];then
     # report public IP Address to cloud
     push_publicip
-
-    # start puppet agent
-    ./puppet.sh --certname $(cat /etc/hostname | tr -d '\n') --server int.proxy.edgescale.org \
-	    --localcacert /etc/ssl/private/edgescale/certs/estrootca.pem
 
     # starting kubelet
     ./k8s.sh

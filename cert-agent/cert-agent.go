@@ -1,10 +1,11 @@
 /*
  **********************************
  *
- * Copyright 2017 NXP
+ * Copyright 2017, 2018 NXP
  *
  **********************************
  */
+
 package main
 
 import (
@@ -49,7 +50,7 @@ type Challenge struct {
 var cfg Config
 
 func InitFlags() {
-	cfg.SecureLevel = flag.Int("s", 1, "security level 0-2")
+	cfg.SecureLevel = flag.Int("s", 0, "security level 0-2")
 	flag.Parse()
 }
 
