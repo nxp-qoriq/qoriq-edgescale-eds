@@ -56,6 +56,8 @@ type Status struct {
 	EsVersion string `json:"esversion"`
 }
 
+var routinesync = make(chan bool, 1)
+
 func InitAgent() error {
 	cli := client.New(&client.Options{
 		ErrorHandler: func(err error) {
@@ -63,7 +65,10 @@ func InitAgent() error {
 		},
 	})
 
-	defer cli.Terminate()
+	defer func() {
+		cli.Terminate()
+		cli.Disconnect()
+	}()
 	device_id, err := os.Hostname()
 	topic := fmt.Sprintf("device/%s", device_id)
 
@@ -110,11 +115,25 @@ func InitAgent() error {
 					}
 				},
 			},
+			&client.SubReq{
+				TopicFilter: []byte(fmt.Sprintf("edgescale/kube/devices/%s", device_id)),
+				QoS:         mqtt.QoS2,
+				Handler: func(topicName, message []byte) {
+					MqAppHandler(cli, device_id, topicName, message)
+				},
+			},
 		},
 	})
 	if err != nil {
 		return err
 	}
+	go func() {
+		<-routinesync
+		log.Infoln("Starting app agent")
+		_ = Listen_and_loop(cli, device_id)
+		log.Warnln("app agent stoped")
+		routinesync <- true
+	}()
 
 	sysstat := SysStat{}
 	for {
@@ -196,7 +215,7 @@ func main() {
 		log.Info("Failed to log to file, using default stderr")
 	}
 	defer fd.Close()
-
+	routinesync <- true
 	for {
 		err := InitAgent()
 		if err != nil {
