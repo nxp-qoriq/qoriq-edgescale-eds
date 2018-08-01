@@ -107,7 +107,7 @@ func Upload_kubelog(logname string) error {
 	if err != nil {
 		return err
 	}
-	_log, err := exec.Command("bash", "-c", "tail -2000 /var/log/kubelet.log").Output()
+	_log, err := exec.Command("bash", "-c", "tail -2000 /var/log/edgescale/kubelet.log").Output()
 	if err != nil {
 		return err
 	}
