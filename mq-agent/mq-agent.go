@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/yosssi/gmq/mqtt"
 	"github.com/yosssi/gmq/mqtt/client"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -54,6 +55,7 @@ type Status struct {
 	MemUsage  string `json:"memusage"`
 	AppNumber string `json:"appnumber"`
 	EsVersion string `json:"esversion"`
+	IpAddr    string `json:"ipaddress"`
 }
 
 var routinesync = make(chan bool, 1)
@@ -174,6 +176,7 @@ func InitAgent() error {
 			MemUsage:  MemPct,
 			AppNumber: AppNum,
 			EsVersion: EsVer,
+			IpAddr:    GetLocalIp(),
 		}
 		b, _ := json.Marshal(status)
 
@@ -187,6 +190,15 @@ func InitAgent() error {
 		}
 		time.Sleep(30 * time.Second)
 	}
+}
+
+func GetLocalIp() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	defer conn.Close()
+	if err != nil {
+		return ""
+	}
+	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
 func InitFlags() Config {
