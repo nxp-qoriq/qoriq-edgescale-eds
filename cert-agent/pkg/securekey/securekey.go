@@ -20,6 +20,55 @@ package sk
 #define DEBUG
 #define     MP_TAG_LEN              32
 
+bool C_sk_pub_key(char *x, char *y){
+
+    int ret = 0;
+    uint8_t *temp;
+    enum sk_status_code ret_status;
+    struct sk_EC_point pub_key_req;
+    uint8_t pub_key_len;
+
+    ret_status = sk_lib_init();
+    if (ret_status == SK_FAILURE) {
+        printf("sk_lib_init failed\n");
+        return -1;
+    }
+
+    pub_key_len = sk_mp_get_pub_key_len();
+    temp = (uint8_t *)malloc(2 * pub_key_len);
+    if (!temp) {
+        printf("%s, %d malloc failed\n", __func__, __LINE__);
+        ret = -1;
+        goto temp_malloc_fail;
+    }
+
+    pub_key_req.len = pub_key_len;
+
+    pub_key_req.x = temp;
+    pub_key_req.y = temp + pub_key_req.len;
+
+    ret_status = sk_mp_get_pub_key(&pub_key_req);
+    if (ret_status) {
+        printf("%s", sk_translate_error_code(ret_status));
+        ret = ret_status;
+        goto pub_key_get_failed;
+    }
+
+    for (int i = 0; i < pub_key_len; i++){
+        x += sprintf(x, "%02x", pub_key_req.x[i]);
+    }
+    for (int i = 0; i < pub_key_len; i++){
+        y += sprintf(y, "%02x", pub_key_req.y[i]);
+    }
+	sk_lib_exit();
+
+pub_key_get_failed:
+    free(temp);
+temp_malloc_fail:
+    return ret;
+
+}
+
 bool C_sk_fuid(char *out) {
     uint8_t ret, i ;
     uint8_t fuid_len;
@@ -170,6 +219,8 @@ err:
 import "C"
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"unsafe"
 )
@@ -216,4 +267,39 @@ func SK_sign(msg string) (string, error) {
 	} else {
 		return "", errors.New("sk_sign failed")
 	}
+}
+
+func SKPubKey() (string, string, error) {
+	var (
+		x [128]byte
+		y [128]byte
+	)
+
+	C_PubX := (*C.char)(unsafe.Pointer(&x[0]))
+	C_PubY := (*C.char)(unsafe.Pointer(&y[0]))
+
+	ret := C.C_sk_pub_key(C_PubX, C_PubY)
+
+	if !ret {
+		return C.GoString(C_PubX), C.GoString(C_PubY), nil
+	} else {
+		return "", "", errors.New("SK Pub Key read failed")
+	}
+}
+
+func SKPubKeySha1() (string, error) {
+	x, y, err := SKPubKey()
+	if err != nil {
+		return "", err
+	} else {
+		return Sha1Sum(x + y), nil
+	}
+
+}
+
+func Sha1Sum(msg string) string {
+	h := sha1.New()
+	h.Write([]byte(msg))
+	d := h.Sum(nil)
+	return hex.EncodeToString(d)
 }

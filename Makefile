@@ -9,7 +9,8 @@ INSTALL ?= install
 
 GOROOT ?= $(HOME)/go
 GOPATH ?= $(HOME)/gopathdir
-GOFILE ?= go1.8.5.linux-amd64.tar.gz
+GOVERSION ?= 1.9.4
+GOFILE ?= go$(GOVERSION).linux-amd64.tar.gz
 
 TARGETS := cert-agent mq-agent startup etc
 
@@ -36,9 +37,10 @@ $(TARGETS):
 	$(MAKE) -C $@ 
 
 goenv:
-	if [ ! -f $(GOROOT)/bin/go ]; then  \
+	$(GOROOT)/bin/go version | grep $(GOVERSION); \
+	if [ "$$?" != "0" ]; then  \
 		wget -c https://redirector.gvt1.com/edgedl/go/$(GOFILE); \
-		tar -C $(HOME) -xzf $(GOFILE); \
+		rm -rf $(GOROOT) && tar -C $(HOME) -xzf $(GOFILE); \
 	fi
 	usr=`whoami`; \
 
