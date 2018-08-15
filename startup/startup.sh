@@ -12,19 +12,26 @@ push_publicip() {
 	# Get public IP
 	publicip=`curl -k https://checkip.amazonaws.com`
 
-	token=""
-	url="https://api.edgescale.org/v1/devices/positions"
+	token=`cat /data/.edgescale.cred`
+	url="$ES_API_URI/devices/positions"
 	# Create curl body
 	body="{"ip": "$publicip", "device_name": "`hostname`"}"
 
-	curl -X POST -H "Content-Type: application/json; verson=$version" -H "dcca_token: $token" $url -d "$body"
+	curl -X POST -H "Content-Type: application/json; verson=$version" -H "access_token: $token" $url -d "$body"
 }
 
 cd /usr/local/bin/
+mkdir -p /data
 
 ./env.sh
 start-stop-daemon --start --startas /bin/tee-supplicant --name tee-supplicant -m --pidfile /var/run/tee-supplicant.pid -b
 ./cert-agent
+
+. /data/config.env
+for env in $(set | grep ^ES)
+do
+	export ${env}
+done	
 
 if [ $? -eq 0 ];then
     # report public IP Address to cloud

@@ -9,7 +9,10 @@
 package main
 
 import (
+	"../cert-agent/pkg/openssl"
 	"bitbucket.org/bertimus9/systemstat"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/yosssi/gmq/mqtt"
 	"github.com/yosssi/gmq/mqtt/client"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -74,20 +78,29 @@ func InitAgent() error {
 	device_id, err := os.Hostname()
 	topic := fmt.Sprintf("device/%s", device_id)
 
+	certPEMBlock, _ := ioutil.ReadFile("/data/certs/edgescale.pem")
+	keyPEMBlock, _ := ioutil.ReadFile("/data/private_keys/edgescale.key")
+	cert, err := openssl.X509KeyPair(certPEMBlock, keyPEMBlock, "/data/private_keys/edgescale.key")
+	tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
+	serverCert, _ := ioutil.ReadFile("/data/certs/rootCA.pem")
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(serverCert)
+	tlsConfig.RootCAs = caCertPool
+
 	err = cli.Connect(&client.ConnectOptions{
 		Network:         "tcp",
-		Address:         "int.msg.edgescale.org:1883",
+		Address:         os.Getenv("ES_MQTT_URI"),
 		CleanSession:    false,
 		ClientID:        []byte(device_id),
 		CONNACKTimeout:  10,
 		PINGRESPTimeout: 10,
 		KeepAlive:       30,
-		TLSConfig:       nil,
+		TLSConfig:       &tlsConfig,
 	})
 	if err != nil {
 		return err
 	}
-	log.Info("Connected to int.msg.edgescale.org:1883")
+	log.Info("Connected to: ", os.Getenv("ES_MQTT_URI"))
 
 	err = cli.Subscribe(&client.SubscribeOptions{
 		SubReqs: []*client.SubReq{

@@ -23,6 +23,7 @@ import "C"
 
 import (
 	"crypto"
+	"crypto/tls"
 )
 
 // Not implemented. Reserved for future use.
@@ -49,4 +50,8 @@ func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 // Not implemented. Reserved for future use.
 func ParseSobjPrivateKey(block []byte) (int, error) {
 	return 0, nil
+}
+
+func X509KeyPair(certPEMBlock, keyPEMBlock []byte, keyfile string) (tls.Certificate, error) {
+	return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 }

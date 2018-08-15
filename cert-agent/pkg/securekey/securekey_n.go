@@ -24,3 +24,8 @@ func SK_oemid() (string, error) {
 func SK_sign(msg string) (string, error) {
 	return "", nil
 }
+
+// Not implemented. Reserved for future use.
+func SKPubKeySha1() (string, error) {
+	return "", nil
+}
