@@ -1,10 +1,32 @@
+#!/bin/sh
+
 #####################################
 #
 # Copyright 2017-2018 NXP
 #
 #####################################
 
-#!/bin/sh
+PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
+DESC="edgescale service"
+NAME="edgescale"
+STARTUP="/usr/local/bin/startup.sh"
 
-/usr/local/bin/startup.sh &
+case "$1" in
+start)
+        $STARTUP &
+        ;;
 
+stop)
+        killall -9 kubelet
+        killall -9 mq-agent
+        ;;
+
+restart)
+        $0 stop
+        $0 start
+        ;;
+
+*)      echo "Usage: /etc/init.d/cron {start|stop|restart}"
+        exit 2
+esac
+exit 0
