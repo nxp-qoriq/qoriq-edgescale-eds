@@ -26,8 +26,8 @@ typedef CK_BYTE * CK_BYTE_PTR;
 
 int C_ECDSA_sign(ENGINE *eng, char *digest, int diglen, CK_BYTE_PTR * sigret, int *siglen, char *key)
 {
-	EVP_PKEY *privkey;
-	EC_KEY *eckey;
+	EVP_PKEY *privkey = NULL;
+	EC_KEY *eckey = NULL;
 
 	FILE *fp;
 	fp = fopen (key, "r");
@@ -54,6 +54,7 @@ int C_ECDSA_do_sign(ENGINE *eng, char *digest, char *sigret, char *key)
 	EVP_PKEY *privkey;
 	EC_KEY *eckey;
 	ECDSA_SIG *signature = NULL;
+    const BIGNUM *sig_r, *sig_s;
 
 	FILE *fp;
 	fp = fopen (key, "r");
@@ -68,8 +69,14 @@ int C_ECDSA_do_sign(ENGINE *eng, char *digest, char *sigret, char *key)
 	eckey = EVP_PKEY_get1_EC_KEY(privkey);
 	signature = ECDSA_do_sign(digest, 20, eckey);
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	sigret = BN_bn2hex(signature->r);
 	sigret += sprintf(sigret, "%s", BN_bn2hex(signature->s));
+else
+   	ECDSA_SIG_get0(signature, &sig_r, &sig_s);
+	sigret = sprintf(sigret, "%s%s", BN_bn2hex(sig_r), BN_bn2hex(sit_s));
+#endif
+
 
 	return 0;
 }

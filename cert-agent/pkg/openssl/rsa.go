@@ -23,7 +23,7 @@ package openssl
 typedef unsigned char CK_BYTE;
 typedef CK_BYTE * CK_BYTE_PTR;
 
-int C_ExportRSAPublicKey(ENGINE *eng, CK_BYTE_PTR * n, int *e, char *key) {
+int C_ExportRSAPublicKey(ENGINE *eng, CK_BYTE_PTR *n, CK_BYTE_PTR *e, char *key) {
 	EVP_PKEY *privkey;
 	RSA *rsakey;
 
@@ -36,9 +36,15 @@ int C_ExportRSAPublicKey(ENGINE *eng, CK_BYTE_PTR * n, int *e, char *key) {
 	ENGINE_set_default(eng, ENGINE_METHOD_ALL);
 
 	rsakey = EVP_PKEY_get1_RSA(privkey);
-
-	*e = *rsakey->e->d;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	*e = BN_bn2dec(rsakey->e);
 	*n = BN_bn2hex(rsakey->n);
+#else
+    const BIGNUM *bn_n, *bn_e;
+	RSA_get0_key(rsakey, &bn_n, &bn_e, NULL);
+	*e = BN_bn2dec(bn_e);
+	*n = BN_bn2hex(bn_n);
+#endif
 	return 0;
 }
 
@@ -83,14 +89,15 @@ type OpensslPrivateKeyRSA struct {
 func ExportRSAPublicKey(eng *C.ENGINE, key string) (crypto.PublicKey, error) {
 	var (
 		n C.CK_BYTE_PTR
-		e C.int
+		e C.CK_BYTE_PTR
 	)
 	var modulus = new(big.Int)
 	C.C_ExportRSAPublicKey(eng, &n, &e, C.CString(key))
 	h, _ := hex.DecodeString(C.GoString((*C.char)(unsafe.Pointer(n))))
 	modulus.SetBytes(h)
+	E, _ := strconv.Atoi(C.GoString((*C.char)(unsafe.Pointer(e))))
 
-	pub := rsa.PublicKey{N: modulus, E: int(e)}
+	pub := rsa.PublicKey{N: modulus, E: E}
 	if pub.E < 2 {
 		return nil, errors.New("crypto11/rsa: malformed RSA key")
 	}

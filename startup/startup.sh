@@ -31,7 +31,7 @@ start-stop-daemon --start --startas /bin/tee-supplicant --name tee-supplicant -m
 for env in $(set | grep ^ES)
 do
 	export ${env}
-done	
+done
 
 if [ $? -eq 0 ];then
     # report public IP Address to cloud
