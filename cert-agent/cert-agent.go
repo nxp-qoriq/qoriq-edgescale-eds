@@ -257,7 +257,7 @@ func Get_EToken(device_id string, signed interface{}) string {
 	case string:
 		sig = s
 	}
-	url := "https://api.edgescale.org/v2/enroll/token"
+	url := "https://api.edgescale.org/v1/enroll/token"
 
 	values := map[string]string{"sig": sig, "device_id": device_id}
 	jsonValue, _ := json.Marshal(values)
@@ -293,7 +293,7 @@ func Get_challenge(signed interface{}, mp string, msg string) (string, string) {
 	case string:
 		sig = s
 	}
-	url := "https://api.edgescale.org/v2/enroll/challenge"
+	url := "https://api.edgescale.org/v1/enroll/challenge"
 
 	var values map[string]string
 	switch i := strings.Split(mp, ":"); len(i) {
@@ -363,11 +363,11 @@ func getEdgeScaleConfig(deviceID string) {
 	ioutil.WriteFile("/data/.edgescale.cred", bs, 0400)
 	resp.Body.Close()
 
-	url = fmt.Sprintf("https://api.edgescale.org/v2/device/endpoint/%s", deviceID)
+	url = fmt.Sprintf("https://api.edgescale.org/v1/devices/%s/endpoints", deviceID)
 	client = &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	req.Header.Add("Accept", fmt.Sprintf("application/json; version=%s", cfg.Version))
-	req.Header.Add("access_token", accessToken)
+	req.Header.Add("access-token", accessToken)
 	resp, err = client.Do(req)
 	if err != nil {
 		fmt.Println(err)
