@@ -72,7 +72,7 @@ int C_ECDSA_do_sign(ENGINE *eng, char *digest, char *sigret, char *key)
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 	sigret = BN_bn2hex(signature->r);
 	sigret += sprintf(sigret, "%s", BN_bn2hex(signature->s));
-else
+#else
    	ECDSA_SIG_get0(signature, &sig_r, &sig_s);
 	sigret = sprintf(sigret, "%s%s", BN_bn2hex(sig_r), BN_bn2hex(sit_s));
 #endif
