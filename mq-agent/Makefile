@@ -11,7 +11,7 @@ GOBUILDTAGS ?= default
 OPENSSL_PATH ?= $(shell pwd)/../../openssl
 CROSS_COMPILE ?= aarch64-linux-gnu-
 CC := ${CROSS_COMPILE}gcc
-CGO_LDFLAGS += -L${OPENSSL_PATH}
+CGO_LDFLAGS += -L${OPENSSL_PATH}/lib
 CGO_CFLAGS += -I${OPENSSL_PATH}/include
 
 all:

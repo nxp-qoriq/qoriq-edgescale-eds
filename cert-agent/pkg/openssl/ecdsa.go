@@ -74,7 +74,7 @@ int C_ECDSA_do_sign(ENGINE *eng, char *digest, char *sigret, char *key)
 	sigret += sprintf(sigret, "%s", BN_bn2hex(signature->s));
 #else
    	ECDSA_SIG_get0(signature, &sig_r, &sig_s);
-	sigret = sprintf(sigret, "%s%s", BN_bn2hex(sig_r), BN_bn2hex(sit_s));
+	sigret = sprintf(sigret, "%s%s", BN_bn2hex(sig_r), BN_bn2hex(sig_s));
 #endif
 
 

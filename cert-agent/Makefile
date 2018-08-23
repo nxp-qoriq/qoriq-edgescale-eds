@@ -14,7 +14,7 @@ OPTEE_CLIENT_EXPORT ?= $(shell pwd)/../../optee_client/out/libteec
 ARCH ?= arm64
 CROSS_COMPILE ?= aarch64-linux-gnu-
 CC := ${CROSS_COMPILE}gcc
-CGO_LDFLAGS += -L${SECURE_OBJ_PATH}/lib -L${OPENSSL_PATH} -L${OPTEE_CLIENT_EXPORT}
+CGO_LDFLAGS += -L${SECURE_OBJ_PATH}/lib -L${OPENSSL_PATH}/lib -L${OPTEE_CLIENT_EXPORT}
 CGO_CFLAGS += -I${SECURE_OBJ_PATH}/include -I${OPENSSL_PATH}/include
 GOBUILDTAGS ?= default
 
