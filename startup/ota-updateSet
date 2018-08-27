@@ -6,7 +6,7 @@
 
 #!/bin/bash
 
-./cert-agent
+/usr/local/bin/cert-agent
 . /data/config.env
 
 dd if=/dev/mmcblk0 of=/tmp/ota-info bs=512 skip=129024 count=1
@@ -28,7 +28,7 @@ fi
 deviceid=`hostname`
 
 get_imageURL(){
-	api_result=`curl -H "Accept: application/json; version=$version" -H "access_token: `cat /data/.edgescale.cerd`" "$ES_API_URI/devices/softwares?device_id=$deviceid&solution=$solutionname&version=$newimageVersion"`
+	api_result=`curl -H "Accept: application/json; version=$version" -H "access-token: $(cat /data/.edgescale.cred)" "$ES_API_URI/devices/softwares?device_id=$deviceid&solution=$solutionname&version=$newimageVersion"`
 	imageURL=`echo $api_result | grep url | sed 's/\"//g' | sed 's/.*url:\(.*$\)/\1/' | awk -F "[,}]" '{print $1}' | sed 's/^[ \t]*//g'`
 }
 

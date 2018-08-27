@@ -12,12 +12,12 @@ push_publicip() {
 	# Get public IP
 	publicip=`curl -k https://checkip.amazonaws.com`
 
-	token=`cat /data/.edgescale.cred`
+	token=$(cat /data/.edgescale.cred)
 	url="$ES_API_URI/devices/positions"
 	# Create curl body
 	body="{"ip": "$publicip", "device_name": "`hostname`"}"
 
-	curl -X POST -H "Content-Type: application/json; verson=$version" -H "access_token: $token" $url -d "$body"
+	curl -X POST -H "Content-Type: application/json; verson=$version" -H "access-token: $token" $url -d "$body"
 }
 
 cd /usr/local/bin/
