@@ -9,14 +9,17 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
+	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/yosssi/gmq/mqtt/client"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -39,6 +42,12 @@ const (
 	MANIFEST      = "/dev/kubelet/"
 	KUBELOG       = "/var/log/edgescale/kubelet.log"
 )
+
+type MqBody struct {
+	Spec struct {
+		Containers []Container `json:"containers"`
+	} `json:"spec"`
+}
 
 // Kubelet container type
 type Container struct {
@@ -258,6 +267,105 @@ func getpodlisthash(pl Podlist) ([]string, []string, error) {
 	//return name, hash, err
 	return n, h, nil
 }
+
+func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
+	var done = make(chan error, 1)
+
+	var mb MqBody
+
+	podlist, err := get_pods()
+	if err != nil {
+		log.Error("Loop get_podlist: ", err)
+	}
+	//skip docker pull if application existed
+	for _, pod := range podlist.Items {
+		if pod.Metadata.Name == mqcmd.Podname {
+			return nil
+		}
+	}
+	err = exec.Command("sh", "-c", "docker version").Run()
+	if err != nil {
+		log.Warnln("docker command is not found, skip")
+		return nil
+	}
+
+	err = json.Unmarshal([]byte(mqcmd.Body), &mb)
+	if err != nil {
+		return err
+	}
+
+	image := mb.Spec.Containers[0].Image
+
+	// TRUST Server name length should be > 10
+	TrustSAddr := os.Getenv("ES_DOCKER_CONTENT_TRUST_SERVER")
+
+	env := os.Environ()
+	cmdpull := fmt.Sprintf("docker pull %s", image)
+	log.Infoln(cmdpull)
+	cmd := exec.Command("sh", "-c", cmdpull)
+
+	if len(image) > 15 && strings.Contains(TrustSAddr, strings.Split(image, `/`)[0]) {
+		env = append(env, fmt.Sprintf("DOCKER_CONTENT_TRUST=%s", "1"))
+		env = append(env, fmt.Sprintf("DOCKER_CONTENT_TRUST_SERVER=%s", TrustSAddr))
+		cmd.Env = env
+	} else if strings.Contains(TrustSAddr, `hub.docker.com`) {
+		env = append(env, fmt.Sprintf("DOCKER_CONTENT_TRUST=%s", "1"))
+		cmd.Env = env
+	} else if strings.Contains(TrustSAddr, `docker.io`) {
+		env = append(env, fmt.Sprintf("DOCKER_CONTENT_TRUST=%s", "1"))
+		cmd.Env = env
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Errorln("StdoutPipe: ", err)
+	}
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	log.Debugln(cmd.Env)
+	err = cmd.Start()
+	if err != nil {
+		log.Errorln(err)
+	}
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			t := scanner.Text()
+			log.Infoln(t)
+			//Report Docker Pull Progress
+			mqcmd.Podstatus = CREATING
+			mqcmd.Type = ACTSTATUS
+			mqcmd.Podmessage = "ImagePull: " + t
+			mqcmd.Body = ""
+			_ = publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
+		}
+	}()
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		time.Sleep(1 * time.Second) //wait go routine done
+		if err != nil {
+			s := stderr.String()
+			log.Infoln(s)
+			//Report Docker Pull Message
+			mqcmd.Podstatus = CREATING
+			mqcmd.Type = ACTSTATUS
+			mqcmd.Podmessage = "PullError: " + s
+			mqcmd.Body = ""
+			_ = publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
+			return err
+		}
+		return nil
+
+	case <-time.After(40 * time.Minute):
+		cmd.Process.Kill()
+		return errors.New("exec command timeout")
+	}
+	return nil
+}
+
 func process_mqkubecmd(mqcli *client.Client, device_id string, cmdl MqcmdL) error {
 	var err error = nil
 	if strings.ToLower(cmdl.Type) == ACTSYNC {
@@ -269,6 +377,15 @@ func process_mqkubecmd(mqcli *client.Client, device_id string, cmdl MqcmdL) erro
 				podnames = append(podnames, m.Podname)
 				if m.Type != ACTDELETE {
 					log.Infof("syncing %s", m.Podname)
+					for i := 0; i < 10; i++ {
+						err = DockerImagePull(mqcli, m)
+						if err == nil {
+							break
+						} else if err != nil && i >= 9 {
+							log.Error("DockerImagePull: ", err)
+							return err
+						}
+					}
 					err = ioutil.WriteFile(podcfg, []byte(m.Body), 0644)
 					if err != nil {
 						log.Error("kube-agent: ", err)
@@ -314,6 +431,15 @@ func process_mqkubecmd(mqcli *client.Client, device_id string, cmdl MqcmdL) erro
 			//create a new pod
 			if strings.ToLower(m.Type) == ACTCREATE {
 				log.Infof("Creating %s", m.Podname)
+				for i := 0; i < 10; i++ {
+					err = DockerImagePull(mqcli, m)
+					if err == nil {
+						break
+					} else if err != nil && i >= 9 {
+						log.Error("DockerImagePull: ", err)
+						return err
+					}
+				}
 				err = ioutil.WriteFile(podcfg, []byte(m.Body), 0644)
 				if err != nil {
 					log.Error("kube-agent: ", err)
@@ -382,6 +508,48 @@ func Listen_and_loop(mqcli *client.Client, device_id string) error {
 	cmd := fmt.Sprintf("mkdir -p %s", MANIFEST)
 	_ = exec.Command("bash", "-c", cmd).Run()
 
+	token := os.Getenv("ES_DOCKER_TRUST_TOKEN")
+	TrustSAddr := os.Getenv("ES_DOCKER_CONTENT_TRUST_SERVER")
+
+	log.Infoln("TRUST_TOKEN: ", token)
+	log.Infoln("TrustSAddr: ", TrustSAddr)
+
+	s, err := url.Parse(TrustSAddr)
+	if err != nil {
+		log.Errorln("Invalid ES_DOCKER_CONTENT_TRUST_SERVER: ", TrustSAddr)
+		goto MAINLOOP
+	}
+
+	if len(token) > 2 {
+
+		tokendec, err := b64.StdEncoding.DecodeString(token)
+		if err != nil {
+			log.Errorln("Invalid ES_DOCKER_TRUST_TOKEN: ", token)
+			goto MAINLOOP
+		}
+		up := strings.Split(string(tokendec), `:`)
+		if len(up) != 2 {
+			log.Errorln("Invalid ES_DOCKER_TRUST_TOKEN: ", token, ` ":" is required`)
+			goto MAINLOOP
+		} else {
+			//log.Debugln("username passwd: ", up)
+			ServerHost := strings.TrimSuffix(TrustSAddr, ":"+s.Port())
+			loginCMD := fmt.Sprintf("docker login -u %s -p %s %s", up[0], up[1], ServerHost)
+
+			if strings.Contains(TrustSAddr, `hub.docker.com`) {
+				loginCMD = fmt.Sprintf("docker login -u %s -p %s", up[0], up[1])
+			} else if strings.Contains(TrustSAddr, `docker.io`) {
+				loginCMD = fmt.Sprintf("docker login -u %s -p %s", up[0], up[1])
+			}
+			log.Debugln("Exec: ", loginCMD)
+			_cmd := exec.Command("sh", "-c", loginCMD)
+			_cmd.Env = os.Environ()
+			logs, err := _cmd.Output()
+			log.Debugln("output: ", string(logs), err)
+		}
+	}
+MAINLOOP:
+	time.Sleep(5 * time.Second)
 	//Enter the Loop
 	for {
 		if stoped == true {
