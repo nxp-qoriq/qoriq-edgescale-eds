@@ -38,7 +38,7 @@ if [ $? -ne 0 ];then
 fi
 if [ $ok -eq 1 ];then
 	echo "Setting time from $testserver"
-	curl -k $testserver >/dev/null 2>&1 && date -s "$(curl -k -s --head $testserver | grep -i ^Date:|head -1 |cut -c 6-)"
+	curl -k $testserver >/dev/null 2>&1 && date -s "$(curl -k -s --head $testserver | grep -i ^Date:|head -n 1 |cut -c 6-)"
 else 
 	echo "Using default time"
 	date -u
