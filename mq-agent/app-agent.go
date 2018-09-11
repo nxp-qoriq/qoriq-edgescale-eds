@@ -275,7 +275,7 @@ func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 
 	podlist, err := get_pods()
 	if err != nil {
-		log.Error("Loop get_podlist: ", err)
+		log.Error("get pods: ", err)
 	}
 	//skip docker pull if application existed
 	for _, pod := range podlist.Items {
@@ -330,14 +330,27 @@ func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 		log.Errorln(err)
 	}
 	go func() {
+		downloaded := 0
+		layers := 0
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			t := scanner.Text()
 			log.Infoln(t)
+			if strings.Contains(t, "Pulling fs layer") {
+				layers += 1
+				continue
+			} else if strings.Contains(t, "Download complete") {
+				downloaded += 1
+			} else if strings.Contains(t, "Pull complete") {
+				downloaded += 1
+			}
+			if layers == 0 {
+				continue
+			}
 			//Report Docker Pull Progress
 			mqcmd.Podstatus = CREATING
 			mqcmd.Type = ACTSTATUS
-			mqcmd.Podmessage = "ImagePull: " + t
+			mqcmd.Podmessage = fmt.Sprintf("%d%%: %s", downloaded*50/layers, t)
 			mqcmd.Body = ""
 			_ = publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
 		}
@@ -357,6 +370,8 @@ func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 			_ = publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
 			return err
 		}
+		mqcmd.Podmessage = "Image Download complete: 100%"
+		_ = publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
 		return nil
 
 	case <-time.After(40 * time.Minute):
@@ -369,14 +384,14 @@ func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 func process_mqkubecmd(mqcli *client.Client, device_id string, cmdl MqcmdL) error {
 	var err error = nil
 	if strings.ToLower(cmdl.Type) == ACTSYNC {
-		log.Info("pod syncing")
+		log.Debug("pod syncing")
 		podnames := make([]string, 0)
 		for _, m := range cmdl.Items {
 			if len(m.Podname) > 1 {
 				podcfg := fmt.Sprintf("%s%s", MANIFEST, m.Podname)
 				podnames = append(podnames, m.Podname)
 				if m.Type != ACTDELETE {
-					log.Infof("syncing %s", m.Podname)
+					log.Debugf("syncing %s", m.Podname)
 					for i := 0; i < 10; i++ {
 						err = DockerImagePull(mqcli, m)
 						if err == nil {
@@ -511,7 +526,7 @@ func Listen_and_loop(mqcli *client.Client, device_id string) error {
 	token := os.Getenv("ES_DOCKER_TRUST_TOKEN")
 	TrustSAddr := os.Getenv("ES_DOCKER_CONTENT_TRUST_SERVER")
 
-	log.Infoln("TRUST_TOKEN: ", token)
+	log.Debugln("TRUST_TOKEN: ", token)
 	log.Infoln("TrustSAddr: ", TrustSAddr)
 
 	s, err := url.Parse(TrustSAddr)
