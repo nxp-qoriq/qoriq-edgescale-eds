@@ -19,7 +19,6 @@ import (
 	"github.com/yosssi/gmq/mqtt/client"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -268,6 +267,41 @@ func getpodlisthash(pl Podlist) ([]string, []string, error) {
 	return n, h, nil
 }
 
+func DockerLogin(ServerName string) error {
+
+	token := os.Getenv("ES_DOCKER_TRUST_TOKEN")
+	log.Debugln("TRUST_TOKEN: ", token)
+
+	if len(token) > 2 {
+
+		tokendec, err := b64.StdEncoding.DecodeString(token)
+		if err != nil {
+			return errors.New("Edcoding: Invalid ES_DOCKER_TRUST_TOKEN")
+		}
+		up := strings.Split(string(tokendec), `:`)
+		if len(up) != 2 {
+			return errors.New(`Invalid ES_DOCKER_TRUST_TOKEN,":" is required`)
+		} else {
+			//log.Debugln("username passwd: ", up)
+			loginCMD := fmt.Sprintf("docker login -u %s -p %s %s", up[0], up[1], ServerName)
+
+			if len(ServerName) < 1 {
+				loginCMD = fmt.Sprintf("docker login -u %s -p %s", up[0], up[1])
+			}
+			log.Debugln("Exec: ", loginCMD)
+			_cmd := exec.Command("sh", "-c", loginCMD)
+			_cmd.Env = os.Environ()
+			logs, err := _cmd.Output()
+			if err != nil {
+				return errors.New(string(logs) + err.Error())
+			}
+			return nil
+		}
+	} else {
+		return errors.New("Invalid ES_DOCKER_TRUST_TOKEN length")
+	}
+}
+
 func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 	var done = make(chan error, 1)
 
@@ -295,8 +329,9 @@ func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 	}
 
 	image := mb.Spec.Containers[0].Image
+	registryL := strings.Split(strings.Split(image, `/`)[0], `.`)
 
-	// TRUST Server name length should be > 10
+	// Generally, TRUST Server name length should be > 10
 	TrustSAddr := os.Getenv("ES_DOCKER_CONTENT_TRUST_SERVER")
 
 	env := os.Environ()
@@ -304,7 +339,11 @@ func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 	log.Infoln(cmdpull)
 	cmd := exec.Command("sh", "-c", cmdpull)
 
-	if len(image) > 15 && strings.Contains(TrustSAddr, strings.Split(image, `/`)[0]) {
+	if len(registryL) > 1 && strings.Contains(TrustSAddr, strings.Join(registryL[1:], `.`)) {
+		err = DockerLogin(strings.Split(image, `/`)[0])
+		if err != nil {
+			log.Errorln(err.Error())
+		}
 		env = append(env, fmt.Sprintf("DOCKER_CONTENT_TRUST=%s", "1"))
 		env = append(env, fmt.Sprintf("DOCKER_CONTENT_TRUST_SERVER=%s", TrustSAddr))
 		cmd.Env = env
@@ -523,47 +562,6 @@ func Listen_and_loop(mqcli *client.Client, device_id string) error {
 	cmd := fmt.Sprintf("mkdir -p %s", MANIFEST)
 	_ = exec.Command("bash", "-c", cmd).Run()
 
-	token := os.Getenv("ES_DOCKER_TRUST_TOKEN")
-	TrustSAddr := os.Getenv("ES_DOCKER_CONTENT_TRUST_SERVER")
-
-	log.Debugln("TRUST_TOKEN: ", token)
-	log.Infoln("TrustSAddr: ", TrustSAddr)
-
-	s, err := url.Parse(TrustSAddr)
-	if err != nil {
-		log.Errorln("Invalid ES_DOCKER_CONTENT_TRUST_SERVER: ", TrustSAddr)
-		goto MAINLOOP
-	}
-
-	if len(token) > 2 {
-
-		tokendec, err := b64.StdEncoding.DecodeString(token)
-		if err != nil {
-			log.Errorln("Invalid ES_DOCKER_TRUST_TOKEN: ", token)
-			goto MAINLOOP
-		}
-		up := strings.Split(string(tokendec), `:`)
-		if len(up) != 2 {
-			log.Errorln("Invalid ES_DOCKER_TRUST_TOKEN: ", token, ` ":" is required`)
-			goto MAINLOOP
-		} else {
-			//log.Debugln("username passwd: ", up)
-			ServerHost := strings.TrimSuffix(TrustSAddr, ":"+s.Port())
-			loginCMD := fmt.Sprintf("docker login -u %s -p %s %s", up[0], up[1], ServerHost)
-
-			if strings.Contains(TrustSAddr, `hub.docker.com`) {
-				loginCMD = fmt.Sprintf("docker login -u %s -p %s", up[0], up[1])
-			} else if strings.Contains(TrustSAddr, `docker.io`) {
-				loginCMD = fmt.Sprintf("docker login -u %s -p %s", up[0], up[1])
-			}
-			log.Debugln("Exec: ", loginCMD)
-			_cmd := exec.Command("sh", "-c", loginCMD)
-			_cmd.Env = os.Environ()
-			logs, err := _cmd.Output()
-			log.Debugln("output: ", string(logs), err)
-		}
-	}
-MAINLOOP:
 	time.Sleep(5 * time.Second)
 	//Enter the Loop
 	for {
