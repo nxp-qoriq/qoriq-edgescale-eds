@@ -33,6 +33,11 @@ do
 	export ${env}
 done
 
+if [ -z $ES_OEM_TRUST_CA ] ; then
+		echo -n $ES_OEM_TRUST_CA | base64 -d > /usr/local/share/ca-certificates/es-oem-trust.crt
+		update-ca-certificates
+fi
+
 if [ $? -eq 0 ];then
     # report public IP Address to cloud
     push_publicip

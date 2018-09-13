@@ -37,6 +37,7 @@ import "C"
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -148,12 +149,23 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte, keyfile string) (tls.Certific
 			if pub.E != keyPubKey.E || pub.N.Cmp(keyPubKey.N) != 0 {
 				return fail(errors.New("public key does not match"))
 			}
+
+			h := []byte{45, 113, 22, 66, 183, 38, 176, 68, 1, 98, 124, 169, 251, 172, 50, 245, 200, 83, 15, 177, 144, 60, 196, 219, 2, 37, 135, 23, 146, 26, 72, 129}
+			s, err := cert.PrivateKey.(crypto.Signer).Sign(rand.Reader, h, crypto.SHA256)
+			if err != nil {
+				return fail(err)
+			}
+			err = rsa.VerifyPKCS1v15(x509Cert.PublicKey.(*rsa.PublicKey), crypto.SHA256, h, s)
+			if err != nil {
+				return fail(err)
+			}
 		} else {
 			return fail(errors.New("key type does not match"))
 		}
 	default:
 		return fail(errors.New("unknown public key algorithm"))
 	}
+
 	return cert, nil
 }
 
