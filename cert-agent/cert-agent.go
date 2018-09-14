@@ -41,14 +41,16 @@ type Config struct {
 	Version     string
 	URI         string
 	APIURI      string `json:"api_uri"`
-	ChainURL    string
+	TrustChain  string `json:"trust_chain"`
+	Retry       *int
+	Dev         *string
 }
 
 type Token struct {
-	E_Token  string `json:"e_token"`
-	APIURI   string `json:"api_uri"`
-	URI      string `json:"ca_uri"`
-	ChainURL string `json:"chain_url"`
+	E_Token    string `json:"e_token"`
+	APIURI     string `json:"api_uri"`
+	URI        string `json:"ca_uri"`
+	TrustChain string `json:"trust_chain"`
 }
 
 type Challenge struct {
@@ -60,7 +62,26 @@ var cfg Config
 
 func InitFlags() {
 	cfg.SecureLevel = flag.Int("s", 0, "security level 0-2")
+	cfg.Retry = flag.Int("retry", 0, "retry, default is always")
+	cfg.Dev = flag.String("dev", "/dev/mmcblk0", "certificate storage dev, default is /dev/mmcblk0")
 	flag.Parse()
+}
+
+func retry(attempts int, sleep time.Duration, f func() error) error {
+	if err := f(); err != nil {
+		if err != nil {
+			if attempts == 0 {
+				time.Sleep(sleep)
+				return retry(attempts, sleep, f)
+			}
+			if attempts--; attempts > 0 {
+				time.Sleep(sleep)
+				return retry(attempts, sleep, f)
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 func CreateCsr(priv crypto.PrivateKey, commonName string, country string, state string, city string, organization string, organizationalUnit string, emailAddress string) ([]byte, error) {
@@ -215,7 +236,7 @@ func phase2() (string, string, string) {
 		signed, err = priv.Sign(rand.Reader, Sha256Sum(response), crypto.SHA256)
 		e_token = Get_EToken(device_id, signed)
 		if err != nil {
-			os.Exit(1)
+			fmt.Println(err)
 		}
 
 	case level == 1:
@@ -230,7 +251,7 @@ func phase2() (string, string, string) {
 		signed, err = priv.Sign(rand.Reader, Sha256Sum(response), crypto.SHA256)
 		e_token = Get_EToken(device_id, signed)
 		if err != nil {
-			os.Exit(1)
+			fmt.Println(err)
 		}
 	case level == 2:
 		fuid, _ = sk.SK_fuid()
@@ -242,7 +263,7 @@ func phase2() (string, string, string) {
 		signed, err = sk.SK_sign(response)
 		e_token = Get_EToken(device_id, signed)
 		if err != nil {
-			os.Exit(1)
+			fmt.Println(err)
 		}
 	}
 
@@ -266,7 +287,6 @@ func Get_EToken(device_id string, signed interface{}) string {
 	resp, err := http.Post(url, contentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(1)
 	}
 	bs, _ := ioutil.ReadAll(resp.Body)
 
@@ -274,11 +294,10 @@ func Get_EToken(device_id string, signed interface{}) string {
 	json.Unmarshal(bs, &t)
 	if t.E_Token == "" {
 		fmt.Println("No valid e_token")
-		os.Exit(1)
 	}
 	resp.Body.Close()
 	cfg.URI = t.URI
-	cfg.ChainURL = t.ChainURL
+	cfg.TrustChain = t.TrustChain
 	cfg.APIURI = t.APIURI
 
 	return t.E_Token
@@ -311,7 +330,6 @@ func Get_challenge(signed interface{}, mp string, msg string) (string, string) {
 	resp, err := http.Post(url, contentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(1)
 	}
 	bs, _ := ioutil.ReadAll(resp.Body)
 	var c Challenge
@@ -319,7 +337,6 @@ func Get_challenge(signed interface{}, mp string, msg string) (string, string) {
 
 	if c.Challenge == "" {
 		fmt.Println("No valid challenge code")
-		os.Exit(1)
 	}
 
 	pin := Get_pin()
@@ -333,6 +350,15 @@ func getEdgeScaleConfig(deviceID string) {
 	certPEMBlock, _ := ioutil.ReadFile("/data/certs/edgescale.pem")
 	keyPEMBlock, _ := ioutil.ReadFile("/data/private_keys/edgescale.key")
 	cert, err := openssl.X509KeyPair(certPEMBlock, keyPEMBlock, "/data/private_keys/edgescale.key")
+	if err != nil {
+		fmt.Println(err)
+		retry(*cfg.Retry, 5*time.Second, func() error {
+			return enroll()
+		})
+		certPEMBlock, _ = ioutil.ReadFile("/data/certs/edgescale.pem")
+		keyPEMBlock, _ = ioutil.ReadFile("/data/private_keys/edgescale.key")
+		cert, err = openssl.X509KeyPair(certPEMBlock, keyPEMBlock, "/data/private_keys/edgescale.key")
+	}
 	tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
 	serverCert, _ := ioutil.ReadFile("/data/certs/rootCA.pem")
 	caCertPool := x509.NewCertPool()
@@ -350,84 +376,65 @@ func getEdgeScaleConfig(deviceID string) {
 		TLSClientConfig: &tlsConfig,
 	}
 	client := &http.Client{Transport: tr}
-	resp, err := client.Get(url)
-	if err != nil {
-		fmt.Println(err)
-	}
-	bs, _ := ioutil.ReadAll(resp.Body)
-	if resp.Status == "401 Unauthorized" {
-		fmt.Println("Get jwt token: ", resp.Status)
-		return
-	}
-	accessToken := string(bs)
-	ioutil.WriteFile("/data/.edgescale.cred", bs, 0400)
-	resp.Body.Close()
+	var accessToken string
+
+	retry(*cfg.Retry, 5*time.Second, func() error {
+		resp, err := client.Get(url)
+		if err != nil {
+			fmt.Println(err)
+			if strings.HasSuffix(err.Error(), "remote error: tls: bad certificate") {
+				retry(*cfg.Retry, 5*time.Second, func() error {
+					return enroll()
+				})
+			}
+			os.Exit(0)
+		}
+		bs, _ := ioutil.ReadAll(resp.Body)
+		if resp.Status == "401 Unauthorized" {
+			fmt.Println("Get jwt token: ", resp.Status)
+			return err
+		}
+		accessToken = string(bs)
+		resp.Body.Close()
+		ioutil.WriteFile("/data/.edgescale.cred", bs, 0400)
+		return nil
+	})
 
 	url = fmt.Sprintf("https://api.edgescale.org/v1/devices/%s/endpoints", deviceID)
 	client = &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("Accept", fmt.Sprintf("application/json; version=%s", cfg.Version))
 	req.Header.Add("access-token", accessToken)
-	resp, err = client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-	}
+	retry(*cfg.Retry, 5*time.Second, func() error {
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
 
-	bs, err = ioutil.ReadAll(resp.Body)
-	if resp.Status == "401 Unauthorized" {
-		fmt.Println("Get EdgeScale endpoint: ", resp.Status)
-		fmt.Println(string(bs))
-		return
-	}
-	resp.Body.Close()
-	jsonconfig.Json2env("es", bs, "/data/config.env")
+		bs, err := ioutil.ReadAll(resp.Body)
+		if resp.Status == "401 Unauthorized" {
+			fmt.Println("Get EdgeScale endpoint: ", resp.Status)
+			return errors.New("401 Unauthorized")
+		}
+		resp.Body.Close()
+		jsonconfig.Json2env("es", bs, "/data/config.env")
+		return nil
+	})
 }
 
-func main() {
-	var err error
-	InitFlags()
-
-	b, _ := ioutil.ReadFile("/etc/edgescale-version")
-	cfg.Version = strings.Trim(string(b), "\n")
-
-	cmd := "dd  if=/dev/mmcblk0 of=/run/secure.bin  skip=62 bs=1M count=1 && sync && mount -o loop /run/secure.bin /data/"
-	err = exec.Command("bash", "-c", cmd).Run()
-	if err != nil {
-		cmd = "fsck.ext2 -yf /run/secure.bin || mkfs.ext2 /run/secure.bin && mount /run/secure.bin /data && mkdir -p /data/{certs,private_keys}"
-		err = exec.Command("bash", "-c", cmd).Run()
-	}
-
+func enroll() error {
 	dev_cert := fmt.Sprintf("/data/certs/edgescale.pem")
 	dev_key := fmt.Sprintf("/data/private_keys/edgescale.key")
-
-	b, err = ioutil.ReadFile(dev_cert)
-	if err != nil {
-		fmt.Println("No valid certificate found, starting 3 Phases Certificate Enrollment")
-	} else {
-		expires, CommonName, err := ParseCertificate(b)
-		if err != nil {
-			fmt.Println("No valid certificate found, starting 3 Phases Certificate Enrollment")
-		} else if *expires > 1 {
-			getEdgeScaleConfig(*CommonName)
-			fmt.Printf("edgescale cert expires: %v days, skip certificate Enrollment\n", *expires)
-			cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", *CommonName)
-			exec.Command("bash", "-c", cmd).Run()
-			os.Exit(0)
-		}
-	}
-
 	fmt.Println("starting Phase1")
-	cmd = "/usr/local/bin/bootstrap-enroll"
-	err = exec.Command("bash", "-c", cmd).Run()
+	cmd := "/usr/local/bin/bootstrap-enroll"
+	err := exec.Command("bash", "-c", cmd).Run()
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	fmt.Println("starting Phase2")
 	device_id, e_token, uri := phase2()
-	if err != nil {
-		panic(err)
-	}
 
 	country := "CN"
 	state := "China"
@@ -436,9 +443,10 @@ func main() {
 	organizationalUnit := ""
 	emailAddress := ""
 
-	fmt.Println("Download EST Server RootCA")
-	cmd = fmt.Sprintf("curl %s -o /data/certs/rootCA.pem", cfg.ChainURL)
-	exec.Command("bash", "-c", cmd).Output()
+	b, err := base64.RawStdEncoding.DecodeString(cfg.TrustChain)
+	if err != nil {
+		ioutil.WriteFile("/data/certs/rootCA.pem", b, 0400)
+	}
 	serverCA, _ := ioutil.ReadFile("/data/certs/rootCA.pem")
 
 	//E-EST certs
@@ -477,7 +485,7 @@ func main() {
 	cert, err := client.SimpleReenroll(csr, b_cert, b_priv)
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 
 	ioutil.WriteFile("/data/certs/estrootca.pem", caCerts, 0400)
@@ -486,8 +494,54 @@ func main() {
 	cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", device_fqdn)
 	exec.Command("bash", "-c", cmd).Run()
 
-	cmd = "sync && dd if=/run/secure.bin of=/dev/mmcblk0 seek=62 bs=1M"
+	cmd = fmt.Sprintf("sync && dd if=/run/secure.bin of=%s seek=62 bs=1M", *cfg.Dev)
 	exec.Command("bash", "-c", cmd).Run()
 	fmt.Printf("set Hostname to %s\n", device_fqdn)
 	getEdgeScaleConfig(device_id)
+	return nil
+}
+
+func main() {
+	var err error
+	InitFlags()
+
+	b, _ := ioutil.ReadFile("/etc/edgescale-version")
+	cfg.Version = strings.Trim(string(b), "\n")
+
+	cmd := fmt.Sprintf("umount /data; dd if=%s of=/run/secure.bin skip=62 bs=1M count=1", *cfg.Dev)
+	err = exec.Command("bash", "-c", cmd).Run()
+	if err != nil {
+		fmt.Println(fmt.Sprintf("failed to open '%s", *cfg.Dev), err)
+		os.Exit(1)
+	}
+
+	cmd = "sync && mount -o loop /run/secure.bin /data/"
+	err = exec.Command("bash", "-c", cmd).Run()
+	if err != nil {
+		cmd = "fsck.ext2 -yf /run/secure.bin || mkfs.ext2 /run/secure.bin && mount /run/secure.bin /data && mkdir -p /data/{certs,private_keys}"
+		err = exec.Command("bash", "-c", cmd).Run()
+	}
+
+	dev_cert := fmt.Sprintf("/data/certs/edgescale.pem")
+
+	b, err = ioutil.ReadFile(dev_cert)
+	if err != nil {
+		fmt.Println("No valid certificate found, starting 3 Phases Certificate Enrollment")
+	} else {
+		expires, CommonName, err := ParseCertificate(b)
+		if err != nil {
+			fmt.Println("No valid certificate found, starting 3 Phases Certificate Enrollment")
+		} else if *expires > 1 {
+			getEdgeScaleConfig(*CommonName)
+			fmt.Printf("edgescale cert expires: %v days, skip certificate Enrollment\n", *expires)
+			cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", *CommonName)
+			exec.Command("bash", "-c", cmd).Run()
+			os.Exit(0)
+		}
+	}
+
+	retry(*cfg.Retry, 5*time.Second, func() error {
+		return enroll()
+	})
+
 }
