@@ -207,10 +207,10 @@ func InitAgent() error {
 
 func GetLocalIp() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
-	defer conn.Close()
 	if err != nil {
 		return ""
 	}
+	defer conn.Close()
 	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
