@@ -386,13 +386,14 @@ func getEdgeScaleConfig(deviceID string) {
 				retry(*cfg.Retry, 5*time.Second, func() error {
 					return enroll()
 				})
+				os.Exit(0)
 			}
-			os.Exit(0)
+			return err
 		}
 		bs, _ := ioutil.ReadAll(resp.Body)
 		if resp.Status == "401 Unauthorized" {
 			fmt.Println("Get jwt token: ", resp.Status)
-			return err
+			return errors.New("401 Unauthorized")
 		}
 		accessToken = string(bs)
 		resp.Body.Close()
