@@ -4,16 +4,36 @@ The cloud service is located at http://portal.edgescale.org. With the dashboard,
 
 Please follow below instructions to build and deploy software images with LSDK tools.
 
-TO compile custom kernel for EDGESCALE with Flexbuild:
+## To compile custom kernel for EDGESCALE with flexbuild
+
+```
 $  make distclean -C build/linux/kernel/<arch>/output/linux-4.x (optional)        
 $  cp packages/apps/edgescale-eds/edgescale_demo_kernel.config packages/linux/linux/arch/arm64/configs
 $  flex-builder  -c linux  -a <arch>  -B fragment:edgescale_demo_kernel.config
+```
 
-TO build EDGESCALE-EDS with Flexbuild:
-$ flex-builder -c edgescale-eds -a <arch>
-$ flex-builder -i merge-component -a <arch>
+## To build EDGESCALE-EDS with flexbuild
 
-Install LSDK into SD card:
+```
+$ flex-builder -i autobuild -a <arch> # autobuild all firmware, linux, apps components and ubuntu rootfs for all arch machines
+$ flex-builder -m ls1046ardb -a arm64 # autobuild all firmware, linux, apps components and ubuntu rootfs for ls1046ardb
+```
+
+## Install LSDK into SD card on target host
+
+```
 $ flex-installer -b build/images/bootpartition_<arch>  -r build/images/ubuntu_xenial_<arch>_rootfs.d  -d /dev/sdx
+```
 
-EDGESCALE-EDS is not enabled by default in flexbuild, to enable it, change CONFIG_BUILD_EDGESCALE_EDS=n to y in flexbuild/configs/build_lsdk.cfg
+## Please Note
+
+EDGESCALE-EDS is not enabled by default in flexbuild,if you want to enable it, you need set the below macro to the file flexbuild/configs/build_lsdk.cfg.
+
+```
+ONFIG_BUILD_OPTEE=y
+CONFIG_BUILD_LIBPKCS11=y
+CONFIG_BUILD_SECURE_OBJ=y
+CONFIG_BUILD_QORIQ_EDGESCALE=y
+# Optional (TEE support option)
+CONFIG_EDGESCALE_SECURE_MODE=y
+```
