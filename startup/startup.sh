@@ -34,6 +34,9 @@ do
 done
 
 if [ -z $ES_OEM_TRUST_CA ] ; then
+		rm -rf /usr/local/share/ca-certificates/es-oem-trust.crt
+		update-ca-certificates
+else
 		echo -n $ES_OEM_TRUST_CA | base64 -d > /usr/local/share/ca-certificates/es-oem-trust.crt
 		update-ca-certificates
 fi
