@@ -127,6 +127,9 @@ func InitAgent() error {
 						log.Println("Update software: ", m.Solution, m.Version, m.Mid)
 						cmd := fmt.Sprintf("kill -s SIGUSR1 $(<'/var/run/puppetlabs/agent.pid')")
 						exec.Command("bash", "-c", cmd).Output()
+					case "factory_reset":
+						cmd := fmt.Sprintf("/usr/local/bin/factory_reset.sh")
+						exec.Command("bash", "-c", cmd).Output()
 					}
 				},
 			},
