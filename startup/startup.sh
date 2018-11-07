@@ -51,6 +51,9 @@ if [ $? -eq 0 ];then
     # check OTA status
     ./ota-statuscheck &
 
+    # check MMC blocks health status
+    ./mmc-check.sh &
+
     # starting mq-agent
     start-stop-daemon --start --startas /usr/local/bin/mq-agent --name mq-agent -m --pidfile /var/run/mq-agent.pid -b
 fi
