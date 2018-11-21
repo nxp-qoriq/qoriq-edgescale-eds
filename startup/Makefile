@@ -15,6 +15,7 @@ install:
 	sudo cp -r startup.sh $(INSTALL_DIR)/usr/local/bin/
 	sudo cp -r ota-updateSet $(INSTALL_DIR)/usr/local/bin/
 	sudo cp -r ota-statuscheck $(INSTALL_DIR)/usr/local/bin/
-
+	sudo cp -f mmc-check.sh $(INSTALL_DIR)/usr/local/bin/
+	sudo cp -f factory_reset.sh $(INSTALL_DIR)/usr/local/bin/
 
 .PHONY: clean install
