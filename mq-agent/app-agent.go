@@ -16,7 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/yosssi/gmq/mqtt/client"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -302,7 +302,7 @@ func DockerLogin(ServerName string) error {
 	}
 }
 
-func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
+func DockerImagePull(mqcli mqtt.Client, mqcmd Mqkubecmd) error {
 	var done = make(chan error, 1)
 
 	var mb MqBody
@@ -420,7 +420,7 @@ func DockerImagePull(mqcli *client.Client, mqcmd Mqkubecmd) error {
 	return nil
 }
 
-func process_mqkubecmd(mqcli *client.Client, device_id string, cmdl MqcmdL) error {
+func process_mqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
 	var err error = nil
 	if strings.ToLower(cmdl.Type) == ACTSYNC {
 		log.Debug("pod syncing")
@@ -521,12 +521,15 @@ func process_mqkubecmd(mqcli *client.Client, device_id string, cmdl MqcmdL) erro
 	}
 }
 
-func MqAppHandler(mqcli *client.Client, device_id string, topicName, message []byte) {
+func MqAppHandler(mqcli mqtt.Client, msg mqtt.Message) {
 	var cmdl MqcmdL
-	log.Debugf("topic recvd: %s", string(topicName))
-	log.Debugf("message recvd: %s", string(message))
+	log.Debugf("topic recvd: %s", msg.Topic())
+	log.Debugf("message recvd: %s", string(msg.Payload()))
 
-	err := json.Unmarshal(message, &cmdl)
+	opts := mqcli.OptionsReader()
+	device_id := opts.ClientID()
+
+	err := json.Unmarshal(msg.Payload(), &cmdl)
 	if err == nil {
 		process_mqkubecmd(mqcli, device_id, cmdl)
 	} else {
@@ -534,7 +537,7 @@ func MqAppHandler(mqcli *client.Client, device_id string, topicName, message []b
 	}
 }
 
-func Listen_and_loop(mqcli *client.Client, device_id string) error {
+func Listen_and_loop(mqcli mqtt.Client, device_id string) error {
 
 	var (
 		hash        = make([]string, 0)
@@ -634,7 +637,7 @@ func to_mqstatuscmd(p Pod, device_id string) (Mqkubecmd, error) {
 
 }
 
-func publish_mesg(cli *client.Client, device_id string, mqcmd Mqkubecmd) error {
+func publish_mesg(cli mqtt.Client, device_id string, mqcmd Mqkubecmd) error {
 	topic := fmt.Sprintf("edgescale/kube/devices/app")
 	m, _ := json.Marshal(mqcmd)
 
@@ -649,15 +652,15 @@ func publish_mesg(cli *client.Client, device_id string, mqcmd Mqkubecmd) error {
 	log.Debugf("publish topic: %s", topic)
 	log.Debugf("publish message: %s", string(m))
 
-	err := cli.Publish(&client.PublishOptions{
-		QoS:       2,
-		TopicName: []byte(topic),
-		Message:   []byte(m),
-	})
-	return err
+	if token := cli.Publish(topic, 2, false, m); token.Wait() && token.Error() != nil {
+		log.Info(token.Error())
+		return token.Error()
+	}
+	return nil
+
 }
 
-func MqSendSyncCmd(mqcli *client.Client, device_id string) error {
+func MqSendSyncCmd(mqcli mqtt.Client, device_id string) error {
 	sycmd := Mqkubecmd{
 		Type:     ACTSYNC,
 		DeviceId: device_id,

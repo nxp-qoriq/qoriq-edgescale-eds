@@ -14,8 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/yosssi/gmq/mqtt"
-	"github.com/yosssi/gmq/mqtt/client"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -40,7 +39,7 @@ func get_endpoint(logname string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	host := "https://api.edgescale.org/v1"
+	host := os.Getenv("ES_API_URI")
 	_url := "/devices/logs/signer"
 
 	url := fmt.Sprintf("%s%s?device_id=%s&logname=%s", host, _url, device_id, logname)
@@ -175,7 +174,7 @@ func Putlog_tocloud(logtype string) (string, error) {
 	return logname, nil
 }
 
-func Action_uploadlog(cli *client.Client, device_id string, m Msg) error {
+func Action_uploadlog(cli mqtt.Client, device_id string, m Msg) error {
 	logname, err := Putlog_tocloud(m.Type)
 	if err != nil {
 		log.Println("Upload log error: ", err)
@@ -192,10 +191,9 @@ func Action_uploadlog(cli *client.Client, device_id string, m Msg) error {
 		Logtype: m.Type,
 	}
 	lmeta, _ := json.Marshal(logmeta)
-	err = cli.Publish(&client.PublishOptions{
-		QoS:       mqtt.QoS0,
-		TopicName: []byte("edgescale/system/devices/logs/all"),
-		Message:   []byte(lmeta),
-	})
-	return err
+	if token := cli.Publish("edgescale/system/devices/logs/all", 0, false, lmeta); token.Wait() && token.Error() != nil {
+		return token.Error()
+	}
+
+	return nil
 }
