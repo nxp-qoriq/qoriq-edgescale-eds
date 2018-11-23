@@ -35,7 +35,7 @@ get_imageURL(){
 get_imageURL
 if [ $imageURL ];then
 	echo "have a new image version=$newimageVersion, machine will reboot and install it!!!!!!!!!!!!!!!!!!!!!!!!!"
-	curl -X POST -H "Content-Type: application/json; version=$version" https://api.edgescale.org/v1/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA start"}'
+	curl -X POST -H "Content-Type: application/json; version=$version" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA start"}'
 	updateStatus=8
 	echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $mid" > /tmp/ota-info
 	dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync

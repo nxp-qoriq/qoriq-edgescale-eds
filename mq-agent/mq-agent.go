@@ -17,9 +17,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/sirupsen/logrus"
-	"github.com/yosssi/gmq/mqtt"
-	"github.com/yosssi/gmq/mqtt/client"
 	"io/ioutil"
 	"net"
 	"os"
@@ -65,90 +64,79 @@ type Status struct {
 var routinesync = make(chan bool, 1)
 
 func InitAgent() error {
-	cli := client.New(&client.Options{
-		ErrorHandler: func(err error) {
-			log.Println("MQTT Client: ", err)
-		},
-	})
-
-	defer func() {
-		cli.Terminate()
-		cli.Disconnect()
-	}()
 	device_id, err := os.Hostname()
 	topic := fmt.Sprintf("device/%s", device_id)
 
 	certPEMBlock, _ := ioutil.ReadFile("/data/certs/edgescale.pem")
 	keyPEMBlock, _ := ioutil.ReadFile("/data/private_keys/edgescale.key")
 	cert, err := openssl.X509KeyPair(certPEMBlock, keyPEMBlock, "/data/private_keys/edgescale.key")
+	if err != nil {
+		return err
+	}
+
 	tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
 	serverCert, _ := ioutil.ReadFile("/data/certs/rootCA.pem")
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(serverCert)
 	tlsConfig.RootCAs = caCertPool
 
-	err = cli.Connect(&client.ConnectOptions{
-		Network:         "tcp",
-		Address:         os.Getenv("ES_MQTT_URI"),
-		CleanSession:    false,
-		ClientID:        []byte(device_id),
-		CONNACKTimeout:  10,
-		PINGRESPTimeout: 10,
-		KeepAlive:       30,
-		TLSConfig:       &tlsConfig,
-	})
-	if err != nil {
-		return err
+	opts := &mqtt.ClientOptions{
+		ClientID:       device_id,
+		PingTimeout:    time.Second * 30,
+		ConnectTimeout: time.Second * 30,
+		AutoReconnect:  true,
+		KeepAlive:      60,
+		TLSConfig:      &tlsConfig,
 	}
-	log.Info("Connected to: ", os.Getenv("ES_MQTT_URI"))
 
-	err = cli.Subscribe(&client.SubscribeOptions{
-		SubReqs: []*client.SubReq{
-			&client.SubReq{
-				TopicFilter: []byte(topic),
-				QoS:         mqtt.QoS2,
-				Handler: func(topicName, message []byte) {
-					log.Debug(string(message))
-					var m Msg
-					json.Unmarshal(message, &m)
-					switch m.Action {
-					case "update_firmware":
-						log.Println("Update filmware: ", m.Solution, m.Version)
-						cmd := fmt.Sprintf("/usr/local/bin/ota-updateSet %s %s %d", m.Solution, m.Version, m.Mid)
-						exec.Command("bash", "-c", cmd).Output()
-					case "unenroll":
-						log.Println("Unenroll device certificate")
-						cmd := fmt.Sprintf("dd if=/dev/zero of=/dev/mmcblk0 bs=1M seek=62 count=1 && reboot")
-						exec.Command("bash", "-c", cmd).Output()
-					case "uploadlog":
-						log.Printf("upload %s log msg recvd", m.Type)
-						Action_uploadlog(cli, device_id, m)
-					case "update_software":
-						log.Println("Update software: ", m.Solution, m.Version, m.Mid)
-						cmd := fmt.Sprintf("kill -s SIGUSR1 $(<'/var/run/puppetlabs/agent.pid')")
-						exec.Command("bash", "-c", cmd).Output()
-					case "factory_reset":
-						cmd := fmt.Sprintf("/usr/local/bin/factory_reset.sh")
-						exec.Command("bash", "-c", cmd).Output()
-					}
-				},
-			},
-			&client.SubReq{
-				TopicFilter: []byte(fmt.Sprintf("edgescale/kube/devices/%s", device_id)),
-				QoS:         mqtt.QoS2,
-				Handler: func(topicName, message []byte) {
-					MqAppHandler(cli, device_id, topicName, message)
-				},
-			},
-		},
-	})
-	if err != nil {
-		return err
+	MQTTURL := fmt.Sprint("ssl://", os.Getenv("ES_MQTT_URI"))
+	log.Info("Connected to: ", MQTTURL)
+	opts.AddBroker(MQTTURL)
+	client := mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		log.Info("Connect error: ", token.Error())
+		return token.Error()
 	}
+
+	defer client.Disconnect(3)
+
+	if token := client.Subscribe(topic, 2, func(client mqtt.Client, msg mqtt.Message) {
+		var m Msg
+		json.Unmarshal(msg.Payload(), &m)
+		switch m.Action {
+		case "update_firmware":
+			log.Println("Update filmware: ", m.Solution, m.Version)
+			cmd := fmt.Sprintf("/usr/local/bin/ota-updateSet %s %s %d", m.Solution, m.Version, m.Mid)
+			exec.Command("bash", "-c", cmd).Output()
+		case "unenroll":
+			log.Println("Unenroll device certificate")
+			cmd := fmt.Sprintf("dd if=/dev/zero of=/dev/mmcblk0 bs=1M seek=62 count=1 && reboot")
+			exec.Command("bash", "-c", cmd).Output()
+		case "uploadlog":
+			log.Printf("upload %s log msg recvd", m.Type)
+			Action_uploadlog(client, device_id, m)
+		case "update_software":
+			log.Println("Update software: ", m.Solution, m.Version, m.Mid)
+			cmd := fmt.Sprintf("kill -s SIGUSR1 $(<'/var/run/puppetlabs/agent.pid')")
+			exec.Command("bash", "-c", cmd).Output()
+		case "factory_reset":
+			cmd := fmt.Sprintf("/usr/local/bin/factory_reset.sh")
+			exec.Command("bash", "-c", cmd).Output()
+		}
+	}); token.Wait() && token.Error() != nil {
+		log.Info("Subscribe error: ", token.Error())
+		return token.Error()
+	}
+
+	if token := client.Subscribe(fmt.Sprintf("edgescale/kube/devices/%s", device_id), 2, MqAppHandler); token.Wait() && token.Error() != nil {
+		log.Info("Subscribe error: ", token.Error())
+		return token.Error()
+	}
+
 	go func() {
 		<-routinesync
 		log.Infoln("Starting app agent")
-		_ = Listen_and_loop(cli, device_id)
+		_ = Listen_and_loop(client, device_id)
 		log.Warnln("app agent stoped")
 		routinesync <- true
 	}()
@@ -195,14 +183,8 @@ func InitAgent() error {
 			IpAddr:    GetLocalIp(),
 		}
 		b, _ := json.Marshal(status)
-
-		err = cli.Publish(&client.PublishOptions{
-			QoS:       mqtt.QoS0,
-			TopicName: []byte("edgescale/health/internal/system/status"),
-			Message:   []byte(b),
-		})
-		if err != nil {
-			return err
+		if token := client.Publish("edgescale/health/internal/system/status", 0, false, b); token.Wait() && token.Error() != nil {
+			log.Info("Publish error", token.Error())
 		}
 		time.Sleep(30 * time.Second)
 	}

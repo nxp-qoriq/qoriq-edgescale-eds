@@ -16,8 +16,8 @@ CGO_CFLAGS += -I${OPENSSL_PATH}/include
 
 all:
 	go get github.com/sirupsen/logrus
-	go get github.com/yosssi/gmq/mqtt
 	go get bitbucket.org/bertimus9/systemstat
+	go get github.com/eclipse/paho.mqtt.golang
 	env GOOS=linux GOARCH=$(ARCH) CGO_ENABLED=1  CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}"  go build --ldflags="-w -s" --tags "${GOBUILDTAGS}"
 
 clean:
