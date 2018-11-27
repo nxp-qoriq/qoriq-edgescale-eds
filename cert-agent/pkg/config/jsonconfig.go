@@ -45,3 +45,10 @@ func Json2env(prefix string, b []byte, cfg string) error {
 	writeEnvConfig(prefix, c, fd)
 	return err
 }
+
+func AddEnvConfig(prefix string, env map[string]interface{}, cfg string) error {
+	fd, err := os.OpenFile(cfg, os.O_RDWR|os.O_APPEND, 0660)
+	defer fd.Close()
+	writeEnvConfig(prefix, env, fd)
+	return err
+}

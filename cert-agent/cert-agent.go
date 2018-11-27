@@ -26,7 +26,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/laurentluce/est-client-go"
+	"github.com/edgeiot/est-client-go"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -205,6 +205,22 @@ func Get_pin() string {
 	return "secure"
 }
 
+func GetOEMID() string {
+	if oemID, _ := sk.SK_oemid(); oemID != "" {
+		return oemID[:6]
+	}
+	b, err := ioutil.ReadFile("/data/device-id.ini")
+	if err != nil {
+		return ""
+	}
+	if o := strings.Split(strings.Trim(string(b), "\n"), ":"); len(o) > 1 {
+		if len(o[1]) == 6 {
+			return o[1][:6]
+		}
+	}
+	return "000000"
+}
+
 func phase2() (string, string, string) {
 	var (
 		response  string
@@ -364,6 +380,9 @@ func getEdgeScaleConfig(deviceID string) {
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(serverCert)
 	tlsConfig.RootCAs = caCertPool
+	oemID := GetOEMID()
+	nextProto := fmt.Sprintf("x-es-%s-est-ca", oemID)
+	tlsConfig.NextProtos = []string{nextProto}
 	if cfg.URI == "" {
 		b, _ := pem.Decode(certPEMBlock)
 		c, _ := x509.ParseCertificate(b.Bytes)
@@ -420,6 +439,7 @@ func getEdgeScaleConfig(deviceID string) {
 		}
 		resp.Body.Close()
 		jsonconfig.Json2env("es", bs, "/data/config.env")
+		jsonconfig.AddEnvConfig("es", map[string]interface{}{"OEMID": oemID}, "/data/config.env")
 		return nil
 	})
 }
@@ -452,6 +472,10 @@ func enroll() error {
 
 	//E-EST certs
 	fmt.Println("starting Phase3")
+	nextProto := fmt.Sprintf("x-es-%s-est-ca", GetOEMID())
+	est.TLSConfig = &tls.Config{
+		NextProtos: []string{nextProto},
+	}
 	client := est.Client{
 		URLPrefix:  uri,
 		Username:   device_id,
