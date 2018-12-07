@@ -73,12 +73,14 @@ func InitAgent() error {
 	if err != nil {
 		return err
 	}
+	nextproto := fmt.Sprintf("x-es-%s-mqtt-ca", os.Getenv("ES_OEMID"))
 
 	tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
 	serverCert, _ := ioutil.ReadFile("/data/certs/rootCA.pem")
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(serverCert)
 	tlsConfig.RootCAs = caCertPool
+	tlsConfig.NextProtos = []string{nextproto}
 
 	opts := &mqtt.ClientOptions{
 		ClientID:       device_id,

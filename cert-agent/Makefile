@@ -20,7 +20,7 @@ GOBUILDTAGS ?= default
 
 
 all:
-	go get github.com/laurentluce/est-client-go
+	go get github.com/edgeiot/est-client-go
 	env CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}" go build --ldflags="-w -s" --tags "${GOBUILDTAGS}"
 
 clean:
