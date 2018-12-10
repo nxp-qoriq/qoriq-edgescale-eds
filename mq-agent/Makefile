@@ -15,6 +15,10 @@ CGO_LDFLAGS += -L${OPENSSL_PATH}/lib
 CGO_CFLAGS += -I${OPENSSL_PATH}/include
 
 all:
+	rm -rf ${GOPATH}/src/golang.org/x/sys
+	rm -rf ${GOPATH}/src/golang.org/x/crypto
+	git clone https://github.com/golang/sys  ${GOPATH}/src/golang.org/x/sys
+	git clone https://github.com/golang/crypto ${GOPATH}/src/golang.org/x/crypto
 	go get github.com/sirupsen/logrus
 	go get bitbucket.org/bertimus9/systemstat
 	go get github.com/eclipse/paho.mqtt.golang
