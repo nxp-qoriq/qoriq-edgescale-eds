@@ -20,7 +20,7 @@ all:
 	git clone https://github.com/golang/sys  ${GOPATH}/src/golang.org/x/sys
 	git clone https://github.com/golang/crypto ${GOPATH}/src/golang.org/x/crypto
 	go get github.com/sirupsen/logrus
-	go get bitbucket.org/bertimus9/systemstat
+	go get github.com/sigma/systemstat
 	go get github.com/eclipse/paho.mqtt.golang
 	env GOOS=linux GOARCH=$(ARCH) CGO_ENABLED=1  CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}"  go build --ldflags="-w -s" --tags "${GOBUILDTAGS}"
 

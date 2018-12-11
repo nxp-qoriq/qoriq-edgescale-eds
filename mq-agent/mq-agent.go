@@ -10,7 +10,7 @@ package main
 
 import (
 	"../cert-agent/pkg/openssl"
-	"bitbucket.org/bertimus9/systemstat"
+	"github.com/sigma/systemstat"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
