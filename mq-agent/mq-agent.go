@@ -159,7 +159,7 @@ func InitAgent() error {
 		MemUsed := sysstat.Mem.MemTotal - sysstat.Mem.MemFree - sysstat.Mem.Cached - sysstat.Mem.Buffers
 		MemUsedPct = 100 * float64(MemUsed) / float64(sysstat.Mem.MemTotal)
 
-		Apps, err := exec.Command("bash", "-c", "docker ps -q | wc -l").Output()
+		Apps, err := exec.Command("bash", "-c", fmt.Sprintf("ls %s|wc -l", MANIFEST)).Output()
 		if err != nil {
 			return err
 		}
