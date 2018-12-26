@@ -196,16 +196,14 @@ func getcontainermesg(puid string) (string, error) {
 	}
 
 	s := string(b)
+	log.Debugln(s)
 	if len(s) < 10 {
 		return "null", errors.New(fmt.Sprintf("Invalid log:%s", s))
 	}
 
 	sl := strings.Split(s, "]")
 	if len(sl) >= 2 {
-		if strings.Contains(sl[1], "Error") {
-			return sl[1], nil
-		}
-		return "", nil
+		return strings.Replace(sl[1], MANIFEST, "", -1), nil
 	}
 	return "null", errors.New(fmt.Sprintf("Invalid log:%s", s))
 }
@@ -251,6 +249,31 @@ func get_pods() (Podlist, error) {
 		}
 		//update podname to remove nodename
 		_pods.Items[i].Metadata.Name = strings.TrimSuffix(_pods.Items[i].Metadata.Name, "-"+_pods.Items[i].Spec.Nodename)
+	}
+
+	//For pods with error cfg
+	files, err := ioutil.ReadDir(MANIFEST)
+	if err != nil {
+		log.Error("kube-agent: ", err)
+	}
+
+	_p := Pod{}
+	podnames := make([]string, 0)
+
+	for _, p := range _pods.Items {
+		podnames = append(podnames, p.Metadata.Name)
+	}
+	for _, f := range files {
+		log.Debugln("kube file name: ", f.Name())
+		ret, _ := in_array(f.Name(), podnames)
+		if ret == false {
+			_p.Metadata.Name = f.Name()
+			_p.Status.Phase = CREATING
+			_p.Status.Message, _ = getcontainermesg(f.Name())
+			if len(_p.Status.Message) > 10 {
+				_pods.Items = append(_pods.Items, _p)
+			}
+		}
 	}
 	return _pods, nil
 
@@ -384,6 +407,8 @@ func DockerImagePull(mqcli mqtt.Client, mqcmd Mqkubecmd) error {
 				downloaded += 1
 			}
 			if layers == 0 {
+				mqcmd.Podstatus = CREATING
+				mqcmd.Type = ACTSTATUS
 				continue
 			}
 			//Report Docker Pull Progress
