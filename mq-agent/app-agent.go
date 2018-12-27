@@ -30,6 +30,7 @@ const (
 	ACTDELETE = "delete"
 	ACTSYNC   = "sync"
 	ACTSTATUS = "status"
+	ACTPUTLOG = "putlog"
 
 	PENDING  = "pending"
 	CREATING = "creating"
@@ -101,7 +102,7 @@ type Mqkubecmd struct {
 type MqcmdL struct {
 	// type add/delete/ a pod, sync pods list
 	// for upload Type is status
-	//"create, delete, sync, status"
+	//"create, delete, sync, status, putlog"
 	Type  string      `json:"type"`
 	Items []Mqkubecmd `json:"items"`
 }
@@ -112,7 +113,7 @@ func SendHttpRequest(argUrl string, argReq []byte, argType string) ([]byte, erro
 		return nil, err
 	}
 	req.Header.Add("User-Agent", "kubectl/v1.7.0")
-	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Accept", "*/*")
 	tr := &http.Transport{
 		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
 		ResponseHeaderTimeout: time.Second * 15,
@@ -206,6 +207,12 @@ func getcontainermesg(puid string) (string, error) {
 		return strings.Replace(sl[1], MANIFEST, "", -1), nil
 	}
 	return "null", errors.New(fmt.Sprintf("Invalid log:%s", s))
+}
+
+func GetContainerLog(pod, container string) ([]byte, error) {
+	url := "https://127.0.0.1:10250/containerLogs/default/"
+	url += pod + "/" + container + "?tail=200"
+	return SendHttpRequest(url, nil, http.MethodGet)
 }
 
 func get_pods() (Podlist, error) {
@@ -556,7 +563,19 @@ func MqAppHandler(mqcli mqtt.Client, msg mqtt.Message) {
 
 	err := json.Unmarshal(msg.Payload(), &cmdl)
 	if err == nil {
-		process_mqkubecmd(mqcli, device_id, cmdl)
+		//upload container logs
+		if cmdl.Type == ACTPUTLOG {
+			mqcmd := cmdl.Items[0]
+			con := mqcmd.Podname
+			pod := mqcmd.Podname + "-" + device_id
+			clogs, _ := GetContainerLog(pod, con)
+
+			mqcmd.Type = ACTPUTLOG
+			mqcmd.Body = string(clogs)
+			go publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
+			return
+		}
+		go process_mqkubecmd(mqcli, device_id, cmdl)
 	} else {
 		log.Error("kube_mq_handler", err)
 	}
