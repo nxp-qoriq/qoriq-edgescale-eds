@@ -36,7 +36,7 @@ get_imageURL(){
 get_imageURL
 if [ $imageURL ];then
 	echo "have a new image version=$newimageVersion, machine will reboot and install it!!!!!!!!!!!!!!!!!!!!!!!!!"
-	curl -X POST -H "Content-Type: application/json; version=$version" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"OTA start"}'
+	curl -X POST -H "Content-Type: application/json; version=$version" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"ota-start"}'
 	if [ "$mid" == "$oldmid" ];then
 		exit 1
 	fi
