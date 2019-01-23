@@ -27,5 +27,8 @@ clean:
 	rm -f cert-agent
 
 install:
-	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/bin
-	sudo cp -r cert-agent $(INSTALL_DIR)/usr/local/bin/
+	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/edgescale/bin
+	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/edgescale/conf
+	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/edgescale/doc
+	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/edgescale/log
+	sudo cp -r cert-agent $(INSTALL_DIR)/usr/local/edgescale/bin

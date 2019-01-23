@@ -27,5 +27,5 @@ clean:
 	rm -f mq-agent
 
 install:
-	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/bin
-	sudo cp -r mq-agent $(INSTALL_DIR)/usr/local/bin/
+	$(INSTALL) -d --mode 755 $(INSTALL_DIR)/usr/local/edgescale/bin
+	sudo cp -r mq-agent $(INSTALL_DIR)/usr/local/edgescale/bin
