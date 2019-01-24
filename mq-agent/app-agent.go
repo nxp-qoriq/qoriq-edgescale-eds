@@ -222,7 +222,7 @@ func get_pods() (Podlist, error) {
 	//get all pod list
 	resp, err := SendHttpRequest(url, nil, http.MethodGet)
 	if err != nil {
-		log.Error("Get pods: ", err)
+		log.Infoln("Waiting kubelet to be ready.")
 		return _pods, err
 	}
 	err = json.Unmarshal(resp, &_pods)
@@ -339,7 +339,7 @@ func DockerImagePull(mqcli mqtt.Client, mqcmd Mqkubecmd) error {
 
 	podlist, err := get_pods()
 	if err != nil {
-		log.Error("get pods: ", err)
+		log.Debugln("get pods: ", err)
 	}
 	//skip docker pull if application existed
 	for _, pod := range podlist.Items {
@@ -619,7 +619,7 @@ func Listen_and_loop(mqcli mqtt.Client, device_id string) error {
 
 		podlist, err := get_pods()
 		if err != nil {
-			log.Error("Loop get_podlist: ", err)
+			log.Debugln("Loop get_podlist: ", err)
 			continue
 		}
 		//report for latest pod status
