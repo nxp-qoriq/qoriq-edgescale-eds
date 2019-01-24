@@ -25,6 +25,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"strconv"
+	"github.com/shirou/gopsutil/disk"
 )
 
 var log = logrus.New()
@@ -51,6 +53,11 @@ type SysStat struct {
 	sysCPUSampled bool
 }
 
+type DiskStat struct {
+	DskFree         string
+	DskUsed         string
+}
+
 type Status struct {
 	ID        string `json:"id"`
 	Timestamp string `json:"timestamp"`
@@ -59,6 +66,8 @@ type Status struct {
 	AppNumber string `json:"appnumber"`
 	EsVersion string `json:"esversion"`
 	IpAddr    string `json:"ipaddress"`
+	DiskFree  string `json:"diskfree"`
+	DiskUsed  string `json:"diskused"`
 }
 
 var routinesync = make(chan bool, 1)
@@ -175,6 +184,7 @@ func InitAgent() error {
 		AppNum = strings.Replace(AppNum, "\n", "", -1)
 		EsVer := fmt.Sprintf("%s", Ver)
 		EsVer = strings.Replace(EsVer, "\n", "", -1)
+		DskStat := GetDiskUsageStat()
 		status := Status{
 			ID:        device_id,
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -183,6 +193,8 @@ func InitAgent() error {
 			AppNumber: AppNum,
 			EsVersion: EsVer,
 			IpAddr:    GetLocalIp(),
+			DiskFree:  DskStat.DskFree,
+			DiskUsed:  DskStat.DskUsed,
 		}
 		b, _ := json.Marshal(status)
 		if token := client.Publish("edgescale/health/internal/system/status", 0, false, b); token.Wait() && token.Error() != nil {
@@ -199,6 +211,17 @@ func GetLocalIp() string {
 	}
 	defer conn.Close()
 	return conn.LocalAddr().(*net.UDPAddr).IP.String()
+}
+
+func GetDiskUsageStat() DiskStat {
+	u, err := disk.Usage("/")
+	if err != nil {
+		panic(err)
+	}
+	du := DiskStat{}
+	du.DskFree  = strconv.FormatUint(u.Free /1024/1024/1024, 10) + " GB"
+	du.DskUsed  = strconv.FormatUint(u.Used /1024/1024/1024, 10) + " GB"
+	return du
 }
 
 func InitFlags() Config {
