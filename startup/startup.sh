@@ -6,7 +6,7 @@
 
 #!/bin/bash
 
-export version=`cat /etc/edgescale-version`
+export version=`cat /usr/local/edgescale/conf/edgescale-version`
 
 push_publicip() {
 	# Get public IP
@@ -20,7 +20,7 @@ push_publicip() {
 	curl -X POST -H "Content-Type: application/json; verson=$version" -H "access-token: $token" $url -d "$body"
 }
 
-cd /usr/local/bin/
+cd /usr/local/edgescale/bin/
 mkdir -p /data
 
 ./env.sh
@@ -55,5 +55,5 @@ if [ $? -eq 0 ];then
     ./mmc-check.sh &
 
     # starting mq-agent
-    start-stop-daemon --start --startas /usr/local/bin/mq-agent --name mq-agent -m --pidfile /var/run/mq-agent.pid -b
+    start-stop-daemon --start --startas /usr/local/edgescale/bin/mq-agent --name mq-agent -m --pidfile /var/run/mq-agent.pid -b
 fi
