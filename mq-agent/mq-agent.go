@@ -117,7 +117,7 @@ func InitAgent() error {
 		switch m.Action {
 		case "update_firmware":
 			log.Println("Update filmware: ", m.Solution, m.Version)
-			cmd := fmt.Sprintf("/usr/local/bin/ota-updateSet %s %s %d", m.Solution, m.Version, m.Mid)
+			cmd := fmt.Sprintf("/usr/local/edgescale/bin/ota-updateSet %s %s %d", m.Solution, m.Version, m.Mid)
 			exec.Command("bash", "-c", cmd).Output()
 		case "unenroll":
 			log.Println("Unenroll device certificate")
@@ -131,7 +131,7 @@ func InitAgent() error {
 			cmd := fmt.Sprintf("kill -s SIGUSR1 $(<'/var/run/puppetlabs/agent.pid')")
 			exec.Command("bash", "-c", cmd).Output()
 		case "factory_reset":
-			cmd := fmt.Sprintf("/usr/local/bin/factory_reset.sh")
+			cmd := fmt.Sprintf("/usr/local/edgescale/bin/factory_reset.sh")
 			exec.Command("bash", "-c", cmd).Output()
 		}
 	}); token.Wait() && token.Error() != nil {
@@ -173,7 +173,7 @@ func InitAgent() error {
 			return err
 		}
 
-		Ver, err := exec.Command("bash", "-c", "cat /etc/edgescale-version").Output()
+		Ver, err := exec.Command("bash", "-c", "cat /usr/local/edgescale/conf/edgescale-version").Output()
 		if err != nil {
 			return errors.New("Error: read edgescale-version")
 		}

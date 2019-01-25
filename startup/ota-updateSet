@@ -6,7 +6,7 @@
 
 #!/bin/bash
 
-/usr/local/bin/cert-agent
+/usr/local/edgescale/bin/cert-agent
 . /data/config.env
 
 dd if=/dev/mmcblk0 of=/tmp/ota-info bs=512 skip=129024 count=1

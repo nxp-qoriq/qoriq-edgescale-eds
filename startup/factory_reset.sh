@@ -1,9 +1,9 @@
 #!/bin/bash
 
-/usr/local/bin/cert-agent
+/usr/local/edgescale/bin/cert-agent
 . /data/config.env
 
-status=$(curl -X DELETE -H "Content-Type: application/json; version=$(cat /etc/edgescale-version)" -H "access-token: $(cat /data/.edgescale.cred)" -s $ES_API_URI/enroll/device/$HOSTNAME)
+status=$(curl -X DELETE -H "Content-Type: application/json; version=$(cat /usr/local/edgescale/conf/edgescale-version)" -H "access-token: $(cat /data/.edgescale.cred)" -s $ES_API_URI/enroll/device/$HOSTNAME)
 root=$(mount | grep "/ " | awk '{print $1}')
 
 if [ $status -ge 2 ]
