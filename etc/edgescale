@@ -6,10 +6,10 @@
 #
 #####################################
 
-PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
+PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/edgescale/bin
 DESC="edgescale service"
 NAME="edgescale"
-STARTUP="/usr/local/bin/startup.sh"
+STARTUP="/usr/local/edgescale/bin/startup.sh"
 
 case "$1" in
 start)

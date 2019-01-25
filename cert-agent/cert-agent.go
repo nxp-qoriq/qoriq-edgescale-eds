@@ -448,7 +448,7 @@ func enroll() error {
 	dev_cert := fmt.Sprintf("/data/certs/edgescale.pem")
 	dev_key := fmt.Sprintf("/data/private_keys/edgescale.key")
 	fmt.Println("starting Phase1")
-	cmd := "/usr/local/bin/bootstrap-enroll"
+	cmd := "/usr/local/edgescale/bin/bootstrap-enroll"
 	err := exec.Command("bash", "-c", cmd).Run()
 	if err != nil {
 		fmt.Println(err)
@@ -530,7 +530,7 @@ func main() {
 	var err error
 	InitFlags()
 
-	b, _ := ioutil.ReadFile("/etc/edgescale-version")
+	b, _ := ioutil.ReadFile("/usr/local/edgescale/conf/edgescale-version")
 	cfg.Version = strings.Trim(string(b), "\n")
 
 	cmd := fmt.Sprintf("umount /data; dd if=%s of=/run/secure.bin skip=62 bs=1M count=1", *cfg.Dev)
