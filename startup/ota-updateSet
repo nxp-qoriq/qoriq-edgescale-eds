@@ -34,16 +34,46 @@ get_imageURL(){
 }
 
 get_imageURL
+
+
+download_images(){
+	count=1
+	while [ $count -le 5 ]
+	do
+		wget -O /updateImages/full_images.tgz -c $imageURL
+		if [ $? != 0 ];then
+			((count++))
+			echo "retrying $count times"
+			sleep 5
+		else
+			break
+		fi
+	done
+
+	if [ $count -gt 5 ];then
+		echo "Network failure download failed"
+		exit 1
+	fi
+}
 if [ $imageURL ];then
 	echo "have a new image version=$newimageVersion, machine will reboot and install it!!!!!!!!!!!!!!!!!!!!!!!!!"
 	curl -X POST -H "Content-Type: application/json; version=$version" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"ota-start"}'
 	if [ "$mid" == "$oldmid" ];then
-		exit 1
+		exit 0
 	fi
 	updateStatus=8
 	echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $mid" > /tmp/ota-info
 	dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
-	reboot
+	download_path=/updateImages
+	mkdir -p ${download_path}
+	download_images
+	if [ -e ${download_path}/*.tgz ];then
+		sleep 6
+		reboot
+	else
+		echo "There are no files here"
+		exit 1
+	fi
 else
 	echo "could not get image,solution=$solutionname version=$newimageVersion"
 fi
