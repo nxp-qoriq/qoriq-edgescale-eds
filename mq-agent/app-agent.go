@@ -16,13 +16,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 const (
@@ -93,10 +94,10 @@ type Mqkubecmd struct {
 	//"create, delete, sync, status"
 	Type       string `json:"type"`
 	DeviceId   string `json:"deviceid"`
-	Podname    string `json:"podname"`
-	Podstatus  string `json:"podstatus"`
-	Podmessage string `json:"podmessage"`
-	Body       string `json:"body"`
+	Podname    string `json:"podname,omitempty"`
+	Podstatus  string `json:"podstatus,omitempty"`
+	Podmessage string `json:"podmessage,omitempty"`
+	Body       string `json:"body,omitempty"`
 }
 
 type MqcmdL struct {
@@ -143,20 +144,6 @@ func in_array(val string, array []string) (exists bool, index int) {
 	return
 }
 
-func in_files(val os.FileInfo, array []os.FileInfo) (exists bool, index int) {
-	exists = false
-	index = -1
-
-	for i, v := range array {
-		if val.Name() == v.Name() {
-			index = i
-			exists = true
-			return
-		}
-	}
-	return
-}
-
 func get_runningpodname() ([]string, []string, error) {
 
 	runningpods := Podlist{}
@@ -188,7 +175,7 @@ func get_runningpodname() ([]string, []string, error) {
 
 }
 
-func getcontainermesg(puid string) (string, error) {
+func GetContainerMesg(puid string) (string, error) {
 
 	cmd := fmt.Sprintf("grep %s %s|tail -1", puid, KUBELOG)
 	b, err := exec.Command("bash", "-c", cmd).Output()
@@ -215,7 +202,7 @@ func GetContainerLog(pod, container string) ([]byte, error) {
 	return SendHttpRequest(url, nil, http.MethodGet)
 }
 
-func get_pods() (Podlist, error) {
+func GetPods() (Podlist, error) {
 	_pods := Podlist{}
 	url := "https://127.0.0.1:10250/pods/"
 
@@ -249,7 +236,7 @@ func get_pods() (Podlist, error) {
 		if ret == true {
 			log.Debugf("update %s to creating", _pods.Items[i].Metadata.Name)
 			_pods.Items[i].Status.Phase = CREATING
-			_pods.Items[i].Status.Message, err = getcontainermesg(_pods.Items[i].Metadata.UID)
+			_pods.Items[i].Status.Message, err = GetContainerMesg(_pods.Items[i].Metadata.UID)
 			if err != nil {
 				log.Error("get log message", err)
 			}
@@ -276,7 +263,7 @@ func get_pods() (Podlist, error) {
 		if ret == false {
 			_p.Metadata.Name = f.Name()
 			_p.Status.Phase = CREATING
-			_p.Status.Message, _ = getcontainermesg(f.Name())
+			_p.Status.Message, _ = GetContainerMesg(f.Name())
 			if len(_p.Status.Message) > 10 {
 				_pods.Items = append(_pods.Items, _p)
 			}
@@ -337,7 +324,7 @@ func DockerImagePull(mqcli mqtt.Client, mqcmd Mqkubecmd) error {
 
 	var mb MqBody
 
-	podlist, err := get_pods()
+	podlist, err := GetPods()
 	if err != nil {
 		log.Debugln("get pods: ", err)
 	}
@@ -452,43 +439,44 @@ func DockerImagePull(mqcli mqtt.Client, mqcmd Mqkubecmd) error {
 	return nil
 }
 
-func process_mqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
+func ProcessMqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
 	var err error = nil
 	if strings.ToLower(cmdl.Type) == ACTSYNC {
 		log.Debug("pod syncing")
 		podnames := make([]string, 0)
 		for _, m := range cmdl.Items {
-			if len(m.Podname) > 1 {
-				podcfg := fmt.Sprintf("%s%s", MANIFEST, m.Podname)
-				podnames = append(podnames, m.Podname)
-				if m.Type != ACTDELETE {
-					log.Debugf("syncing %s", m.Podname)
-					for i := 0; i < 10; i++ {
-						err = DockerImagePull(mqcli, m)
-						if err == nil {
-							break
-						} else if err != nil && i >= 9 {
-							log.Error("DockerImagePull: ", err)
-							return err
-						}
+			if m.Podname == "" {
+				continue
+			}
+			podcfg := fmt.Sprintf("%s%s", MANIFEST, m.Podname)
+			podnames = append(podnames, m.Podname)
+			if m.Type != ACTDELETE {
+				log.Debugf("syncing %s", m.Podname)
+				for i := 0; i < 10; i++ {
+					err = DockerImagePull(mqcli, m)
+					if err == nil {
+						break
+					} else if err != nil && i >= 9 {
+						log.Error("DockerImagePull: ", err)
+						return err
 					}
-					err = ioutil.WriteFile(podcfg, []byte(m.Body), 0644)
-					if err != nil {
-						log.Error("kube-agent: ", err)
-					}
-				} else {
-					err := os.Remove(podcfg)
-					if err != nil {
-						if os.IsNotExist(err) {
-							log.Warnln("pod have removed: ", m.Podname)
-							deletedmessage := Mqkubecmd{
-								Type:      ACTDELETE,
-								DeviceId:  m.DeviceId,
-								Podname:   m.Podname,
-								Podstatus: DELETED,
-							}
-							_ = publish_mesg(mqcli, device_id, deletedmessage)
+				}
+				err = ioutil.WriteFile(podcfg, []byte(m.Body), 0644)
+				if err != nil {
+					log.Error("kube-agent: ", err)
+				}
+			} else {
+				err := os.Remove(podcfg)
+				if err != nil {
+					if os.IsNotExist(err) {
+						log.Warnln("pod have removed: ", m.Podname)
+						deletedmessage := Mqkubecmd{
+							Type:      ACTDELETE,
+							DeviceId:  m.DeviceId,
+							Podname:   m.Podname,
+							Podstatus: DELETED,
 						}
+						_ = publish_mesg(mqcli, device_id, deletedmessage)
 					}
 				}
 			}
@@ -512,6 +500,9 @@ func process_mqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
 		return err
 	} else {
 		for _, m := range cmdl.Items {
+			if m.Podname == "" {
+				continue
+			}
 			podcfg := fmt.Sprintf("%s%s", MANIFEST, m.Podname)
 
 			//create a new pod
@@ -574,8 +565,26 @@ func MqAppHandler(mqcli mqtt.Client, msg mqtt.Message) {
 			mqcmd.Body = string(clogs)
 			go publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
 			return
+		} else if cmdl.Type == ACTSTATUS {
+			log.Debug("report latest status to cloud")
+			podlist, err := GetPods()
+			if err != nil {
+				log.Debugln("get pods: ", err)
+			}
+			for _, pod := range podlist.Items {
+
+				scmd, err := to_mqstatuscmd(pod, device_id)
+				if err != nil {
+					log.Error("Mqstatuscmd", err)
+					continue
+				}
+				go publish_mesg(mqcli, device_id, scmd)
+				return
+			}
+
+		} else {
+			go ProcessMqkubecmd(mqcli, device_id, cmdl)
 		}
-		go process_mqkubecmd(mqcli, device_id, cmdl)
 	} else {
 		log.Error("kube_mq_handler", err)
 	}
@@ -617,7 +626,7 @@ func Listen_and_loop(mqcli mqtt.Client, device_id string) error {
 		}
 		time.Sleep(LOOP_INTERVAL)
 
-		podlist, err := get_pods()
+		podlist, err := GetPods()
 		if err != nil {
 			log.Debugln("Loop get_podlist: ", err)
 			continue
