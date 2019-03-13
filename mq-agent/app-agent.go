@@ -32,6 +32,7 @@ const (
 	ACTSYNC   = "sync"
 	ACTSTATUS = "status"
 	ACTPUTLOG = "putlog"
+	ACTRMIM   = "rmim"
 
 	PENDING  = "pending"
 	CREATING = "creating"
@@ -439,6 +440,18 @@ func DockerImagePull(mqcli mqtt.Client, mqcmd Mqkubecmd) error {
 	return nil
 }
 
+func GetImageName(b []byte) string {
+	var mb MqBody
+
+	err := json.Unmarshal(b, &mb)
+	if err != nil {
+		return ""
+	}
+
+	return mb.Spec.Containers[0].Image
+
+}
+
 func ProcessMqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
 	var err error = nil
 	if strings.ToLower(cmdl.Type) == ACTSYNC {
@@ -499,14 +512,16 @@ func ProcessMqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
 		}
 		return err
 	} else {
+		//ACTRMIM, ACTCREATE, ACTDELETE
 		for _, m := range cmdl.Items {
 			if m.Podname == "" {
 				continue
 			}
 			podcfg := fmt.Sprintf("%s%s", MANIFEST, m.Podname)
+			action := strings.ToLower(m.Type)
 
 			//create a new pod
-			if strings.ToLower(m.Type) == ACTCREATE {
+			if action == ACTCREATE {
 				log.Infof("Creating %s", m.Podname)
 				for i := 0; i < 10; i++ {
 					err = DockerImagePull(mqcli, m)
@@ -521,7 +536,8 @@ func ProcessMqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
 				if err != nil {
 					log.Error("kube-agent: ", err)
 				}
-			} else {
+			} else if action == ACTDELETE ||
+				action == ACTRMIM {
 				//delete  pod
 				log.Infof("Deleting %s", m.Podname)
 				err := os.Remove(podcfg)
@@ -537,6 +553,38 @@ func ProcessMqkubecmd(mqcli mqtt.Client, device_id string, cmdl MqcmdL) error {
 						_ = publish_mesg(mqcli, m.DeviceId, deletedmessage)
 
 					}
+				}
+				if action == ACTRMIM {
+					go func() {
+						n := GetImageName([]byte(m.Body))
+						log.Infof("Remove Image %s", n)
+						cmd := fmt.Sprintf("docker rmi -f %s", n)
+						for i := 0; i < 10; i++ {
+							time.Sleep(5 * time.Second)
+							runnings, _, err := get_runningpodname()
+							if err == nil {
+								time.Sleep(4 * time.Second)
+								yes, _ := in_array(m.Podname, runnings)
+								if yes {
+									//pod is still running
+									continue
+								} else {
+									//delete the image
+									log.Debugf("remove %s at %d times", n, i)
+									_ = exec.Command("sh", "-c", cmd).Run()
+									time.Sleep(2 * time.Second)
+									break
+								}
+								if i >= 9 {
+									log.Warnln("Continue to remove %s yet", n)
+									_ = exec.Command("sh", "-c", cmd).Run()
+									time.Sleep(2 * time.Second)
+									break
+								}
+							}
+						}
+					}()
+
 				}
 			}
 		}
