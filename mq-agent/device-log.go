@@ -35,9 +35,9 @@ type LogMeta struct {
 func get_endpoint(logname string) (string, error) {
 
 	// Get device ID
-	device_id, err := os.Hostname()
-	if err != nil {
-		return "", err
+	device_id := os.Getenv("ES_DEVICEID")
+	if device_id == "" {
+		return "", errors.New("invalid device id")
 	}
 	host := os.Getenv("ES_API_URI")
 	_url := "/devices/logs/signer"
