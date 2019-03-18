@@ -39,11 +39,14 @@ import (
 type Config struct {
 	SecureLevel *int
 	Version     string
+	Config      *string
 	URI         string
+	DeviceID    string
 	APIURI      string `json:"api_uri"`
 	TrustChain  string `json:"trust_chain"`
 	Retry       *int
 	Dev         *string
+	ReNew       *bool
 }
 
 type Token struct {
@@ -51,6 +54,7 @@ type Token struct {
 	APIURI     string `json:"api_uri"`
 	URI        string `json:"ca_uri"`
 	TrustChain string `json:"trust_chain"`
+	Model      string `json:"device_model"`
 }
 
 type Challenge struct {
@@ -58,12 +62,17 @@ type Challenge struct {
 	Challenge string `json:"challenge"`
 }
 
-var cfg Config
+var (
+	cfg    Config
+	esconf ESconf
+)
 
 func InitFlags() {
 	cfg.SecureLevel = flag.Int("s", 0, "security level 0-2")
 	cfg.Retry = flag.Int("retry", 0, "retry, default is always")
 	cfg.Dev = flag.String("dev", "/dev/mmcblk0", "certificate storage dev, default is /dev/mmcblk0")
+	cfg.Config = flag.String("config", "/usr/local/edgescale/conf/config.yml", "edgescale config file")
+	cfg.ReNew = flag.Bool("renew", false, "renew the certificateRequest")
 	flag.Parse()
 }
 
@@ -170,13 +179,20 @@ func Get_device_fqdn(device_id string) (string, error) {
 	}
 
 	bs, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
 
 	var m DeviceModel
 	json.Unmarshal(bs, &m)
 	resp.Body.Close()
 
 	device_fqdn := fmt.Sprintf("%s.%s.%s.%s.%s", device_id, m.Model, m.Type, m.Platform, m.Vendor)
-	return device_fqdn, err
+	if m.Model == "" {
+		return device_fqdn, errors.New("device model not found")
+	}
+
+	return device_fqdn, nil
 
 }
 
@@ -206,7 +222,7 @@ func Get_pin() string {
 }
 
 func GetOEMID() string {
-	if oemID, _ := sk.SK_oemid(); oemID != "" {
+	if oemID, _ := sk.SK_oemid(); oemID != "0000000000000000000000000000000000000000" {
 		return oemID[:6]
 	}
 	b, err := ioutil.ReadFile("/data/device-id.ini")
@@ -214,20 +230,23 @@ func GetOEMID() string {
 		return ""
 	}
 	if o := strings.Split(strings.Trim(string(b), "\n"), ":"); len(o) > 1 {
-		if len(o[1]) == 6 {
+		if len(o[1]) >= 6 {
 			return o[1][:6]
+		} else {
+			return o[1]
 		}
 	}
 	return "000000"
 }
 
-func phase2() (string, string, string) {
+func phase2() (string, string, string, string) {
 	var (
-		response  string
-		e_token   string
-		device_id string
-		fuid      string
-		oemID     string
+		response     string
+		e_token      string
+		device_id    string
+		device_model string
+		fuid         string
+		oemID        string
 	)
 
 	b, err := ioutil.ReadFile("/data/device-id.ini")
@@ -246,11 +265,15 @@ func phase2() (string, string, string) {
 	case level < 1:
 		b, _ := ioutil.ReadFile(mf_key)
 		block, _ := pem.Decode(b)
-		priv, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
+		if block == nil {
+			fmt.Println("failed to decode mf key")
+			os.Exit(1)
+		}
+		priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 		signed, err := priv.Sign(rand.Reader, Sha256Sum(msg), crypto.SHA256)
 		response, device_id = Get_challenge(signed, fuid, msg)
 		signed, err = priv.Sign(rand.Reader, Sha256Sum(response), crypto.SHA256)
-		e_token = Get_EToken(device_id, signed)
+		e_token, device_model = Get_EToken(device_id, signed)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -265,7 +288,7 @@ func phase2() (string, string, string) {
 		signed, err := priv.Sign(rand.Reader, Sha256Sum(msg), crypto.SHA256)
 		response, device_id = Get_challenge(signed, fuid, msg)
 		signed, err = priv.Sign(rand.Reader, Sha256Sum(response), crypto.SHA256)
-		e_token = Get_EToken(device_id, signed)
+		e_token, device_model = Get_EToken(device_id, signed)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -277,16 +300,16 @@ func phase2() (string, string, string) {
 		mp := fmt.Sprintf("%s:%s:%s", fuid, oemID, keyHash)
 		response, device_id = Get_challenge(signed, mp, msg)
 		signed, err = sk.SK_sign(response)
-		e_token = Get_EToken(device_id, signed)
+		e_token, device_model = Get_EToken(device_id, signed)
 		if err != nil {
 			fmt.Println(err)
 		}
 	}
 
-	return device_id, e_token, cfg.URI
+	return device_id, device_model, e_token, cfg.URI
 }
 
-func Get_EToken(device_id string, signed interface{}) string {
+func Get_EToken(device_id string, signed interface{}) (string, string) {
 	var sig string
 	switch s := signed.(type) {
 	case []byte:
@@ -294,7 +317,7 @@ func Get_EToken(device_id string, signed interface{}) string {
 	case string:
 		sig = s
 	}
-	url := "https://api.edgescale.org/v1/enroll/token"
+	url := fmt.Sprintf("%s/v1/enroll/token", esconf.API)
 
 	values := map[string]string{"sig": sig, "device_id": device_id}
 	jsonValue, _ := json.Marshal(values)
@@ -303,8 +326,13 @@ func Get_EToken(device_id string, signed interface{}) string {
 	resp, err := http.Post(url, contentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		fmt.Println(err)
+		return "", ""
 	}
-	bs, _ := ioutil.ReadAll(resp.Body)
+	bs, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println(err)
+		return "", ""
+	}
 
 	var t Token
 	json.Unmarshal(bs, &t)
@@ -316,7 +344,7 @@ func Get_EToken(device_id string, signed interface{}) string {
 	cfg.TrustChain = t.TrustChain
 	cfg.APIURI = t.APIURI
 
-	return t.E_Token
+	return t.E_Token, t.Model
 
 }
 
@@ -328,7 +356,7 @@ func Get_challenge(signed interface{}, mp string, msg string) (string, string) {
 	case string:
 		sig = s
 	}
-	url := "https://api.edgescale.org/v1/enroll/challenge"
+	url := fmt.Sprintf("%s/v1/enroll/challenge", esconf.API)
 
 	var values map[string]string
 	switch i := strings.Split(mp, ":"); len(i) {
@@ -346,6 +374,7 @@ func Get_challenge(signed interface{}, mp string, msg string) (string, string) {
 	resp, err := http.Post(url, contentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
 		fmt.Println(err)
+		return "", ""
 	}
 	bs, _ := ioutil.ReadAll(resp.Body)
 	var c Challenge
@@ -388,6 +417,7 @@ func getEdgeScaleConfig(deviceID string) {
 		c, _ := x509.ParseCertificate(b.Bytes)
 		u, _ := url.Parse(c.OCSPServer[0])
 		cfg.URI = fmt.Sprintf("https://%s", u.Host)
+		cfg.DeviceID = c.Subject.CommonName
 	}
 
 	url := fmt.Sprintf("%s/.well-known/jwt", cfg.URI)
@@ -420,7 +450,7 @@ func getEdgeScaleConfig(deviceID string) {
 		return nil
 	})
 
-	url = fmt.Sprintf("https://api.edgescale.org/v1/devices/%s/endpoints", deviceID)
+	url = fmt.Sprintf("%s/v1/devices/%s/endpoints", esconf.API, deviceID)
 	client = &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("Accept", fmt.Sprintf("application/json; version=%s", cfg.Version))
@@ -440,6 +470,7 @@ func getEdgeScaleConfig(deviceID string) {
 		resp.Body.Close()
 		jsonconfig.Json2env("es", bs, "/data/config.env")
 		jsonconfig.AddEnvConfig("es", map[string]interface{}{"OEMID": oemID}, "/data/config.env")
+		jsonconfig.AddEnvConfig("es", map[string]interface{}{"DeviceID": cfg.DeviceID}, "/data/config.env")
 		return nil
 	})
 }
@@ -455,7 +486,7 @@ func enroll() error {
 	}
 
 	fmt.Println("starting Phase2")
-	device_id, e_token, uri := phase2()
+	device_id, device_model, e_token, uri := phase2()
 
 	country := "CN"
 	state := "China"
@@ -488,7 +519,17 @@ func enroll() error {
 	b_priv, err := ioutil.ReadFile("/tmp/bootstrap.key")
 
 	var device_fqdn string
-	device_fqdn, err = Get_device_fqdn(device_id)
+
+	if device_model == "" {
+		device_fqdn, err = Get_device_fqdn(device_id)
+		if err != nil {
+			fmt.Println("Invalid deviceID:", device_fqdn)
+			return err
+		}
+	} else {
+		device_fqdn = fmt.Sprintf("%s.%s", device_id, device_model)
+	}
+	cfg.DeviceID = device_fqdn
 
 	var (
 		priv []byte
@@ -516,19 +557,24 @@ func enroll() error {
 	ioutil.WriteFile("/data/certs/estrootca.pem", caCerts, 0400)
 	ioutil.WriteFile(dev_cert, cert, 0400)
 
-	cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", device_fqdn)
+	cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", device_id)
 	exec.Command("bash", "-c", cmd).Run()
 
 	cmd = fmt.Sprintf("sync && dd if=/run/secure.bin of=%s seek=62 bs=1M", *cfg.Dev)
 	exec.Command("bash", "-c", cmd).Run()
-	fmt.Printf("set Hostname to %s\n", device_fqdn)
+	fmt.Printf("set Hostname to %s\n", device_id)
+
 	getEdgeScaleConfig(device_id)
 	return nil
 }
 
 func main() {
 	var err error
+	if esconf.API == "" {
+		esconf.API = "https://api.edgescale.org"
+	}
 	InitFlags()
+	Mft()
 
 	b, _ := ioutil.ReadFile("/usr/local/edgescale/conf/edgescale-version")
 	cfg.Version = strings.Trim(string(b), "\n")
@@ -556,10 +602,10 @@ func main() {
 		expires, CommonName, err := ParseCertificate(b)
 		if err != nil {
 			fmt.Println("No valid certificate found, starting 3 Phases Certificate Enrollment")
-		} else if *expires > 1 {
+		} else if *expires > 1 && !*cfg.ReNew {
 			getEdgeScaleConfig(*CommonName)
 			fmt.Printf("edgescale cert expires: %v days, skip certificate Enrollment\n", *expires)
-			cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", *CommonName)
+			cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", strings.Split(*CommonName, ".")[0])
 			exec.Command("bash", "-c", cmd).Run()
 			os.Exit(0)
 		}

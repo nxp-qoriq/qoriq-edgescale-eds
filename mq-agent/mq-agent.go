@@ -10,7 +10,6 @@ package main
 
 import (
 	"../cert-agent/pkg/openssl"
-	"github.com/sigma/systemstat"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -18,15 +17,16 @@ import (
 	"flag"
 	"fmt"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/sigma/systemstat"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
-	"github.com/shirou/gopsutil/disk"
 )
 
 var log = logrus.New()
@@ -54,8 +54,8 @@ type SysStat struct {
 }
 
 type DiskStat struct {
-	DskFree         string
-	DskUsed         string
+	DskFree string
+	DskUsed string
 }
 
 type Status struct {
@@ -73,7 +73,7 @@ type Status struct {
 var routinesync = make(chan bool, 1)
 
 func InitAgent() error {
-	device_id, err := os.Hostname()
+	device_id := os.Getenv("ES_DEVICEID")
 	topic := fmt.Sprintf("device/%s", device_id)
 
 	certPEMBlock, _ := ioutil.ReadFile("/data/certs/edgescale.pem")
@@ -219,8 +219,8 @@ func GetDiskUsageStat() DiskStat {
 		panic(err)
 	}
 	du := DiskStat{}
-	du.DskFree  = strconv.FormatUint(u.Free /1024/1024/1024, 10) + " GB"
-	du.DskUsed  = strconv.FormatUint(u.Used /1024/1024/1024, 10) + " GB"
+	du.DskFree = strconv.FormatUint(u.Free/1024/1024/1024, 10) + " GB"
+	du.DskUsed = strconv.FormatUint(u.Used/1024/1024/1024, 10) + " GB"
 	return du
 }
 
