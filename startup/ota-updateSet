@@ -33,11 +33,12 @@ get_imageURL(){
 	imageURL=`echo $api_result | grep url | sed 's/\"//g' | sed 's/.*url:\(.*$\)/\1/' | awk -F "[,}]" '{print $1}' | sed 's/^[ \t]*//g'`
 }
 
-get_imageURL
-
-
 download_images(){
-	count=1
+	feedback_status "ota-fetch"
+	download_path=/updateImages
+	mkdir -p ${download_path}
+
+	count=0
 	while [ $count -le 5 ]
 	do
 		wget -O /updateImages/full_images.tgz -c $imageURL
@@ -51,27 +52,36 @@ download_images(){
 	done
 
 	if [ $count -gt 5 ];then
-		echo "Network failure download failed"
-		exit 1
+		return 1
+	elif [ ! -e ${download_path}/*.tgz ];then
+		return 1
+	else
+		return 0
 	fi
 }
+
+feedback_status(){
+	curl -X POST -H "Content-Type: application/json; version=$version" -H "access-token: $(cat /data/.edgescale.cred)" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"'"$1"'"}'
+}
+
+get_imageURL
+
 if [ $imageURL ];then
 	echo "have a new image version=$newimageVersion, machine will reboot and install it!!!!!!!!!!!!!!!!!!!!!!!!!"
-	curl -X POST -H "Content-Type: application/json; version=$version" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"ota-start"}'
+	feedback_status "ota-start"
 	if [ "$mid" == "$oldmid" ];then
 		exit 0
 	fi
 	updateStatus=8
 	echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $mid" > /tmp/ota-info
 	dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
-	download_path=/updateImages
-	mkdir -p ${download_path}
+
 	download_images
-	if [ -e ${download_path}/*.tgz ];then
-		sleep 6
+	if [ $? -eq 0 ];then
+		sleep 5
 		reboot
 	else
-		echo "There are no files here"
+		echo "Download solution image failed"
 		exit 1
 	fi
 else
