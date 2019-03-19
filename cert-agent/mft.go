@@ -47,12 +47,6 @@ func Mft() error {
 		fuid  string
 		oemID string
 	)
-	cmd = fmt.Sprintf("dd if=%s of=/run/secure.bin skip=62 bs=1M count=1 && e2label /run/secure.bin | grep MFT", *cfg.Dev)
-	err = exec.Command("bash", "-c", cmd).Run()
-	if err == nil {
-		return nil
-	}
-
 	data, _ := ioutil.ReadFile(*cfg.Config)
 	args, _ := ioutil.ReadFile("/proc/cmdline")
 	yaml.Unmarshal(data, &esconf)
@@ -61,6 +55,13 @@ func Mft() error {
 	if esconf.Mft.Key == "" {
 		return nil
 	}
+
+	cmd = fmt.Sprintf("dd if=%s of=/run/secure.bin skip=62 bs=1M count=1 && e2label /run/secure.bin | grep MFT", *cfg.Dev)
+	err = exec.Command("bash", "-c", cmd).Run()
+	if err == nil {
+		return nil
+	}
+
 	fmt.Println("Starting MFT service")
 
 	mac := hmac.New(sha256.New, []byte(esconf.Mft.Key))
@@ -117,10 +118,10 @@ func sha1Sum(b []byte) string {
 
 func deviceReg(fuid string, oemID string, sig string, keyID string, skPUB string, skHash string) error {
 	type retStatus struct {
-		Error  string `json:"error"`
-		Status string `json:"status"`
+		Message string `json:"message"`
+		Status  string `json:"status"`
 	}
-	url := fmt.Sprintf("%s/v1/mft/devices", esconf.API)
+	url := fmt.Sprintf("%s/mft/devices", esconf.API)
 
 	values := map[string]string{"sig": sig, "fuid": fuid, "oem_id": oemID, "key_id": keyID, "sk_pub": skPUB, "sk_hash": skHash}
 	jsonValue, _ := json.Marshal(values)
@@ -140,9 +141,9 @@ func deviceReg(fuid string, oemID string, sig string, keyID string, skPUB string
 
 	var r retStatus
 	json.Unmarshal(bs, &r)
-	if r.Status == "failed" {
-		fmt.Println(r.Error)
-		return errors.New(r.Error)
+	if r.Status != "success" {
+		fmt.Println("Device Create Error:", r.Message)
+		return errors.New(r.Message)
 	}
 	return nil
 }
