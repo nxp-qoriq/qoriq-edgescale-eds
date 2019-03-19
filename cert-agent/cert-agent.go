@@ -317,7 +317,7 @@ func Get_EToken(device_id string, signed interface{}) (string, string) {
 	case string:
 		sig = s
 	}
-	url := fmt.Sprintf("%s/v1/enroll/token", esconf.API)
+	url := fmt.Sprintf("%s/enroll/token", esconf.API)
 
 	values := map[string]string{"sig": sig, "device_id": device_id}
 	jsonValue, _ := json.Marshal(values)
@@ -356,7 +356,7 @@ func Get_challenge(signed interface{}, mp string, msg string) (string, string) {
 	case string:
 		sig = s
 	}
-	url := fmt.Sprintf("%s/v1/enroll/challenge", esconf.API)
+	url := fmt.Sprintf("%s/enroll/challenge", esconf.API)
 
 	var values map[string]string
 	switch i := strings.Split(mp, ":"); len(i) {
@@ -450,7 +450,7 @@ func getEdgeScaleConfig(deviceID string) {
 		return nil
 	})
 
-	url = fmt.Sprintf("%s/v1/devices/%s/endpoints", esconf.API, deviceID)
+	url = fmt.Sprintf("%s/devices/%s/endpoints", esconf.API, deviceID)
 	client = &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("Accept", fmt.Sprintf("application/json; version=%s", cfg.Version))
@@ -571,7 +571,7 @@ func enroll() error {
 func main() {
 	var err error
 	if esconf.API == "" {
-		esconf.API = "https://api.edgescale.org"
+		esconf.API = "https://api.edgescale.org/v1"
 	}
 	InitFlags()
 	Mft()
