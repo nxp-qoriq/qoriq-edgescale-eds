@@ -21,6 +21,7 @@ GOBUILDTAGS ?= default
 
 all:
 	go get github.com/edgeiot/est-client-go
+	go get gopkg.in/yaml.v2
 	env CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}" go build -o cert-agent --ldflags="-w -s" --tags "${GOBUILDTAGS}"
 
 clean:
