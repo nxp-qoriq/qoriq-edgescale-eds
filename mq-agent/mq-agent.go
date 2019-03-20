@@ -36,13 +36,14 @@ type Config struct {
 }
 
 type Msg struct {
-	Model_id int    `json:"model_id"`
-	Mid      string `json:"mid"`
-	Solution string `json:"solution"`
-	Version  string `json:"version"`
-	Action   string `josn:"action"`
-	Url      string `josn:"url"`
-	Type     string `josn:"type"`
+	Model_id   int    `json:"model_id"`
+	Mid        string `json:"mid"`
+	SolutionID int    `json:"solutionid"`
+	Solution   string `json:"solution"`
+	Version    string `json:"version"`
+	Action     string `josn:"action"`
+	Url        string `josn:"url"`
+	Type       string `josn:"type"`
 }
 
 type SysStat struct {
@@ -116,8 +117,8 @@ func InitAgent() error {
 		json.Unmarshal(msg.Payload(), &m)
 		switch m.Action {
 		case "update_firmware":
-			log.Println("Update filmware: ", m.Solution, m.Version)
-			cmd := fmt.Sprintf("/usr/local/edgescale/bin/ota-updateSet %s %s %s", m.Solution, m.Version, m.Mid)
+			log.Println("Update filmware: ", m.SolutionID, m.Solution, m.Version, m.Mid)
+			cmd := fmt.Sprintf("/usr/local/edgescale/bin/ota-updateSet %s %s %s %d", m.Solution, m.Version, m.Mid, m.SolutionID)
 			exec.Command("bash", "-c", cmd).Output()
 		case "unenroll":
 			log.Println("Unenroll device certificate")

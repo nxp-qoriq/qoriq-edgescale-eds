@@ -12,7 +12,9 @@ platform=`cat /tmp/ota-info | awk '{print $2}'`
 oldimageVersion=`cat /tmp/ota-info | awk '{print $3}'`
 newimageVersion=`cat /tmp/ota-info | awk '{print $4}'`
 solutionname=`cat /tmp/ota-info | awk '{print $5}'`
-mid=`cat /tmp/ota-info | awk '{print $6}'`
+solutionid=`cat /tmp/ota-info | awk '{print $6}'`
+autoOta=`cat /tmp/ota-info | awk '{print $7}'`
+mid=`cat /tmp/ota-info | awk '{print $8}'`
 
 if [ "$updateStatus"x = 0x ];then
         exit 0
@@ -20,12 +22,16 @@ fi
 
 if [ "$updateStatus"x = 2x ];then
         oldimageVersion=$newimageVersion
-	deviceid=`hostname`
-	curl -X POST -H "Content-Type: application/json; version=$version" -H "access-token: $(cat /data/.edgescale.cred)" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"ota-complete"}'
+	deviceid=$ES_DEVICEID
+	if [ $autoOta -eq 0 ];then
+	  curl -X POST -H "Content-Type: application/json; version=$version" -H "access-token: $(cat /data/.edgescale.cred)" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"ota-complete", "solutionid":'$solutionid'}'
+	else
+	  curl -X POST -H "Content-Type: application/json; version=$version" -H "access-token: $(cat /data/.edgescale.cred)" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "solutionid":'$solutionid'}'
+	fi
 fi
 
 updateStatus=0
 
-echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $mid" > /tmp/ota-info
+echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $solutionid $autoOta $mid" > /tmp/ota-info
 dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
 
