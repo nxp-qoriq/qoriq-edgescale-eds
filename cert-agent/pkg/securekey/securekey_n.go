@@ -14,6 +14,7 @@ package sk
 #include "stdio.h"
 #include "stdint.h"
 #include "stdlib.h"
+#include "string.h"
 #include "errno.h"
 #include "unistd.h"
 #include "fcntl.h"
@@ -32,6 +33,12 @@ enum sk_status_code sk_get_fuid(char *fuid)
     int mem;
     void *ptr;
     uint32_t *data, *tmp;
+	tmp = (uint32_t *)malloc(32);
+	if (!tmp) {
+        printf("malloc failed\n");
+        goto err1;
+    }
+	memset((void *)tmp, 0, 32);
 
     if ((mem = open ("/dev/mem", O_RDWR | O_SYNC)) == -1) {
         printf("Cannot open /dev/mem\n");
@@ -59,6 +66,7 @@ enum sk_status_code sk_get_fuid(char *fuid)
 
     ret = SK_SUCCESS;
     munmap(ptr, 4096);
+	free(tmp);
 err1:
     close(mem);
 err:
@@ -71,6 +79,12 @@ enum sk_status_code sk_get_oemid(char *oem_id)
     int mem;
     void *ptr;
     uint32_t *data, *tmp;
+	tmp = (uint32_t *)malloc(32);
+	if (!tmp) {
+        printf("malloc failed\n");
+        goto err1;
+    }
+	memset((void *)tmp, 0, 32);
 
     if ((mem = open ("/dev/mem", O_RDWR | O_SYNC)) == -1) {
         printf("Cannot open /dev/mem\n");
@@ -101,6 +115,7 @@ enum sk_status_code sk_get_oemid(char *oem_id)
 
     ret = SK_SUCCESS;
     munmap(ptr, 4096);
+	free(tmp);
 err1:
     close(mem);
 err:
@@ -115,7 +130,7 @@ import (
 )
 
 func SK_fuid() (string, error) {
-	c_fuid := C.CString("")
+	c_fuid := C.CString("0000000000000000")
 	defer C.free(unsafe.Pointer(c_fuid))
 	C.sk_get_fuid(c_fuid)
 	return C.GoString(c_fuid), nil
