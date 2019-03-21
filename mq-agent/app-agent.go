@@ -274,6 +274,16 @@ func GetPods() (Podlist, error) {
 
 }
 
+func GetNodeName() string {
+	pods, _ := GetPods()
+	if len(pods.Items) > 0 {
+		return pods.Items[0].Spec.Nodename
+	} else {
+		H, _ := os.Hostname()
+		return H
+	}
+}
+
 func getpodlisthash(pl Podlist) ([]string, []string, error) {
 	n := make([]string, 0)
 	h := make([]string, 0)
@@ -606,7 +616,7 @@ func MqAppHandler(mqcli mqtt.Client, msg mqtt.Message) {
 		if cmdl.Type == ACTPUTLOG {
 			mqcmd := cmdl.Items[0]
 			con := mqcmd.Podname
-			pod := mqcmd.Podname + "-" + device_id
+			pod := mqcmd.Podname + "-" + GetNodeName()
 			clogs, _ := GetContainerLog(pod, con)
 
 			mqcmd.Type = ACTPUTLOG
