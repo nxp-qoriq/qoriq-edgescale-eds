@@ -15,7 +15,7 @@ push_publicip() {
 	token=$(cat /data/.edgescale.cred)
 	url="$ES_API_URI/devices/positions"
 	# Create curl body
-	body="{"ip": "$publicip", "device_name": "`hostname`"}"
+	body="{"ip": "$publicip", "device_name": "$ES_DEVICEID"}"
 
 	curl -X POST -H "Content-Type: application/json; verson=$version" -H "access-token: $token" $url -d "$body"
 }
