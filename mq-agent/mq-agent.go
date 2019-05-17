@@ -134,6 +134,9 @@ func InitAgent() error {
 		case "factory_reset":
 			cmd := fmt.Sprintf("/usr/local/edgescale/bin/factory_reset.sh")
 			exec.Command("bash", "-c", cmd).Output()
+		case "reboot":
+			cmd := fmt.Sprintf("reboot")
+			exec.Command("bash", "-c", cmd).Output()
 		}
 	}); token.Wait() && token.Error() != nil {
 		log.Info("Subscribe error: ", token.Error())
