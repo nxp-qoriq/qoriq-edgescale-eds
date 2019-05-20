@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/joho/godotenv"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/sigma/systemstat"
 	"github.com/sirupsen/logrus"
@@ -74,6 +75,11 @@ type Status struct {
 var routinesync = make(chan bool, 1)
 
 func InitAgent() error {
+	err := godotenv.Load("/data/config.env")
+	if err != nil {
+		return err
+	}
+
 	device_id := os.Getenv("ES_DEVICEID")
 	topic := fmt.Sprintf("device/%s", device_id)
 

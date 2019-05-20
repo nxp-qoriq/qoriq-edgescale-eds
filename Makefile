@@ -12,7 +12,7 @@ GOPATH ?= $(HOME)/gopathdir
 GOVERSION ?= 1.9.4
 GOFILE ?= go$(GOVERSION).linux-amd64.tar.gz
 
-TARGETS := cert-agent mq-agent startup etc
+TARGETS := cert-agent mq-agent watchdog startup etc
 
 .PHONY: $(TARGETS) clean all install
 
