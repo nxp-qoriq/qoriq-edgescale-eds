@@ -46,6 +46,7 @@ type Config struct {
 	TrustChain  string `json:"trust_chain"`
 	Retry       *int
 	Dev         *string
+	DevAddr     *int
 	ReNew       *bool
 }
 
@@ -71,6 +72,7 @@ func InitFlags() {
 	cfg.SecureLevel = flag.Int("s", 0, "security level 0-2")
 	cfg.Retry = flag.Int("retry", 0, "retry, default is always")
 	cfg.Dev = flag.String("dev", "/dev/mmcblk0", "certificate storage dev, default is /dev/mmcblk0")
+	cfg.DevAddr = flag.Int("devaddr", 62, "secure firmware offset, default is 62")
 	cfg.Config = flag.String("config", "/usr/local/edgescale/conf/config.yml", "edgescale config file")
 	cfg.ReNew = flag.Bool("renew", false, "renew the certificateRequest")
 	flag.Parse()
@@ -560,7 +562,7 @@ func enroll() error {
 	cmd = fmt.Sprintf("echo %s > /etc/hostname && hostname -F /etc/hostname", device_id)
 	exec.Command("bash", "-c", cmd).Run()
 
-	cmd = fmt.Sprintf("sync && dd if=/run/secure.bin of=%s seek=62 bs=1M", *cfg.Dev)
+	cmd = fmt.Sprintf("sync && dd if=/run/secure.bin of=%s seek=%d bs=1M", *cfg.Dev, *cfg.DevAddr)
 	exec.Command("bash", "-c", cmd).Run()
 	fmt.Printf("set Hostname to %s\n", device_id)
 
@@ -574,12 +576,18 @@ func main() {
 		esconf.API = "https://api.edgescale.org/v1"
 	}
 	InitFlags()
+	if sk.SK_ITS() && *cfg.SecureLevel < 2 {
+		*cfg.SecureLevel = 2
+		cmd := "modprobe securekeydev || reboot"
+		exec.Command("bash", "-c", cmd).Run()
+	}
+
 	Mft()
 
 	b, _ := ioutil.ReadFile("/usr/local/edgescale/conf/edgescale-version")
 	cfg.Version = strings.Trim(string(b), "\n")
 
-	cmd := fmt.Sprintf("umount /data; dd if=%s of=/run/secure.bin skip=62 bs=1M count=1", *cfg.Dev)
+	cmd := fmt.Sprintf("umount /data; dd if=%s of=/run/secure.bin skip=%d bs=1M count=1", *cfg.Dev, *cfg.DevAddr)
 	err = exec.Command("bash", "-c", cmd).Run()
 	if err != nil {
 		fmt.Println(fmt.Sprintf("failed to open '%s", *cfg.Dev), err)

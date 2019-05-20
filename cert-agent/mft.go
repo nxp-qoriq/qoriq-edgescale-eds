@@ -56,7 +56,7 @@ func Mft() error {
 		return nil
 	}
 
-	cmd = fmt.Sprintf("dd if=%s of=/run/secure.bin skip=62 bs=1M count=1 && e2label /run/secure.bin | grep MFT", *cfg.Dev)
+	cmd = fmt.Sprintf("dd if=%s of=/run/secure.bin skip=%d bs=1M count=1 && e2label /run/secure.bin | grep MFT", *cfg.Dev, *cfg.DevAddr)
 	err = exec.Command("bash", "-c", cmd).Run()
 	if err == nil {
 		return nil
@@ -106,7 +106,7 @@ func Mft() error {
 
 	exec.Command("bash", "-c", "sync").Run()
 	exec.Command("bash", "-c", "umount /tmp/data").Run()
-	exec.Command("bash", "-c", fmt.Sprintf("dd if=/tmp/secure.bin of=%s bs=1M seek=62 conv=sync", *cfg.Dev)).Run()
+	exec.Command("bash", "-c", fmt.Sprintf("dd if=/tmp/secure.bin of=%s bs=1M seek=%d conv=sync", *cfg.Dev, *cfg.DevAddr)).Run()
 	return err
 }
 
