@@ -126,23 +126,30 @@ err:
 import "C"
 
 import (
+	"strings"
 	"unsafe"
 )
 
 func SK_fuid() (string, error) {
-	c_fuid := C.CString("0000000000000000")
-	defer C.free(unsafe.Pointer(c_fuid))
-	C.sk_get_fuid(c_fuid)
-	return C.GoString(c_fuid), nil
+	if strings.HasPrefix(GetPlatform(), "ls") {
+		c_fuid := C.CString("0000000000000000")
+		defer C.free(unsafe.Pointer(c_fuid))
+		C.sk_get_fuid(c_fuid)
+		return C.GoString(c_fuid), nil
+	}
+	return "0000000000000000", nil
 }
 
 func SK_oemid() (string, error) {
-	buf := make([]byte, 128)
-	c_oemid := C.CString(string(buf))
+	if strings.HasPrefix(GetPlatform(), "ls") {
+		buf := "0000000000000000000000000000000000000000"
+		c_oemid := C.CString(string(buf))
 
-	defer C.free(unsafe.Pointer(c_oemid))
-	C.sk_get_oemid(c_oemid)
-	return C.GoString(c_oemid), nil
+		defer C.free(unsafe.Pointer(c_oemid))
+		C.sk_get_oemid(c_oemid)
+		return C.GoString(c_oemid), nil
+	}
+	return "0000000000000000000000000000000000000000", nil
 }
 
 // Not implemented. Reserved for future use.
