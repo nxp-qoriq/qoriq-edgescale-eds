@@ -45,6 +45,7 @@ type Msg struct {
 	Action     string `josn:"action"`
 	Url        string `josn:"url"`
 	Type       string `josn:"type"`
+	IsSync     bool   `josn:"issync"`
 }
 
 type SysStat struct {
@@ -70,6 +71,13 @@ type Status struct {
 	IpAddr    string `json:"ipaddress"`
 	DiskFree  string `json:"diskfree"`
 	DiskUsed  string `json:"diskused"`
+}
+
+type TaskResp struct {
+	ID     string      `json:"id"`
+	Action string      `json:"action"`
+	Device string      `json:"device"`
+	Result interface{} `json:"result"`
 }
 
 var routinesync = make(chan bool, 1)
@@ -121,6 +129,17 @@ func InitAgent() error {
 	if token := client.Subscribe(topic, 2, func(client mqtt.Client, msg mqtt.Message) {
 		var m Msg
 		json.Unmarshal(msg.Payload(), &m)
+		// send response msg
+		if m.IsSync && m.Mid != "" {
+			r := TaskResp{
+				ID:     m.Mid,
+				Action: m.Action,
+				Device: device_id,
+				Result: "command received",
+			}
+			rb, _ := json.Marshal(r)
+			_ = client.Publish(fmt.Sprintf("edgescale/task/msg/resp"), 0, false, []byte(rb))
+		}
 		switch m.Action {
 		case "update_firmware":
 			log.Println("Update filmware: ", m.SolutionID, m.Solution, m.Version, m.Mid)
