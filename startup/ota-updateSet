@@ -1,15 +1,24 @@
 #####################################
 #
-# Copyright 2017-2018 NXP
+# Copyright 2017-2019 NXP
 #
 #####################################
 
 #!/bin/bash
 
+#Call this script when the mq-agent send upgrade commands.
+#
+#Status=0 Successful start linux on SD card.
+#
+#Status=1 Successfully deployed image in SD card,And it will start normally from SD card after reset.
+#
+#Status=2 Failed start linux on SD card,And it will rollback,get old version image.
+#
+#Status=8 The Solution images download completed,And it will automatically reboot and image installation in bootstrap image.
 /usr/local/edgescale/bin/cert-agent
 . /data/config.env
 
-dd if=/dev/mmcblk0 of=/tmp/ota-info bs=512 skip=129024 count=1
+updateStatus=`cat /tmp/ota-info | awk '{print $1}'`
 platform=`cat /tmp/ota-info | awk '{print $2}'`
 oldimageVersion=`cat /tmp/ota-info | awk '{print $3}'`
 oldmid=`cat /tmp/ota-info | awk '{print $8}'`
@@ -75,12 +84,13 @@ get_imageURL
 if [ $imageURL ];then
 	echo "have a new image version=$newimageVersion, machine will reboot and install it!!!!!!!!!!!!!!!!!!!!!!!!!"
 	feedback_status "ota-start"
-	updateStatus=8
 	echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $solutionid $autoOta $mid" > /tmp/ota-info
-	dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
 
 	download_images
 	if [ $? -eq 0 ];then
+		updateStatus=8
+		echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $solutionid $autoOta $mid" > /tmp/ota-info
+		dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
 		sleep 5
 		reboot
 	else
