@@ -1,3 +1,6 @@
+INSTALL_DIR ?= /
+INSTALL ?= install
+
 all:
 	go get github.com/joho/godotenv
 	go build --ldflags="-s -w" -o es-watchdog
