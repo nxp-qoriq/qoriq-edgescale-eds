@@ -32,13 +32,6 @@ enum sk_status_code sk_get_fuid(char *fuid)
     uint32_t ret = SK_FAILURE;
     int mem;
     void *ptr;
-    uint32_t *data, *tmp;
-	tmp = (uint32_t *)malloc(32);
-	if (!tmp) {
-        printf("malloc failed\n");
-        goto err1;
-    }
-	memset((void *)tmp, 0, 32);
 
     if ((mem = open ("/dev/mem", O_RDWR | O_SYNC)) == -1) {
         printf("Cannot open /dev/mem\n");
@@ -55,18 +48,14 @@ enum sk_status_code sk_get_fuid(char *fuid)
         goto err1;
     }
 
-    data = (uint32_t *)ptr;
-	tmp[0] = data[135];
-	tmp[1] = data[136];
+	ptr = ptr + 135*4;
 
-	uint8_t *d = (uint8_t *)tmp;
     for (int i = 0; i < 8; i++){
-        fuid += sprintf(fuid, "%02x", d[i]);
+        fuid += sprintf(fuid, "%02x", *((uint8_t*)ptr+i));
     }
 
     ret = SK_SUCCESS;
     munmap(ptr, 4096);
-	free(tmp);
 err1:
     close(mem);
 err:
@@ -78,13 +67,6 @@ enum sk_status_code sk_get_oemid(char *oem_id)
     uint32_t ret = SK_FAILURE;
     int mem;
     void *ptr;
-    uint32_t *data, *tmp;
-	tmp = (uint32_t *)malloc(32);
-	if (!tmp) {
-        printf("malloc failed\n");
-        goto err1;
-    }
-	memset((void *)tmp, 0, 32);
 
     if ((mem = open ("/dev/mem", O_RDWR | O_SYNC)) == -1) {
         printf("Cannot open /dev/mem\n");
@@ -101,21 +83,13 @@ enum sk_status_code sk_get_oemid(char *oem_id)
         goto err1;
     }
 
-    data = (uint32_t *)ptr;
-	tmp[0] = data[157];
-	tmp[1] = data[158];
-	tmp[2] = data[159];
-	tmp[3] = data[160];
-	tmp[4] = data[161];
-
-	uint8_t *d = (uint8_t *)tmp;
+	ptr = ptr + 157*4;
 	for (int i=0; i < 20; i++) {
-        oem_id += sprintf(oem_id, "%02x", d[i]);
+        oem_id += sprintf(oem_id, "%02x", *((uint8_t*)ptr+i));
 	}
 
     ret = SK_SUCCESS;
     munmap(ptr, 4096);
-	free(tmp);
 err1:
     close(mem);
 err:
