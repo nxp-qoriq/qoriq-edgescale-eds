@@ -62,15 +62,19 @@ type DiskStat struct {
 }
 
 type Status struct {
-	ID        string `json:"id"`
-	Timestamp string `json:"timestamp"`
-	CPUUsage  string `json:"cpuusage"`
-	MemUsage  string `json:"memusage"`
-	AppNumber string `json:"appnumber"`
-	EsVersion string `json:"esversion"`
-	IpAddr    string `json:"ipaddress"`
-	DiskFree  string `json:"diskfree"`
-	DiskUsed  string `json:"diskused"`
+	ID        string   `json:"id"`
+	Timestamp string   `json:"timestamp"`
+	CPUUsage  string   `json:"cpuusage"`
+	CPUNum    int      `json:"cpunum"`
+	CPUFreq   int      `json:"cpufreq"`
+	MemTotal  uint64   `json:"memtotal"`
+	MemUsage  string   `json:"memusage"`
+	AppNumber string   `json:"appnumber"`
+	AppList   []string `json:"applist"`
+	EsVersion string   `json:"esversion"`
+	IpAddr    string   `json:"ipaddress"`
+	DiskFree  string   `json:"diskfree"`
+	DiskUsed  string   `json:"diskused"`
 }
 
 type TaskResp struct {
@@ -197,9 +201,13 @@ func InitAgent() error {
 		MemUsed := sysstat.Mem.MemTotal - sysstat.Mem.MemFree - sysstat.Mem.Cached - sysstat.Mem.Buffers
 		MemUsedPct = 100 * float64(MemUsed) / float64(sysstat.Mem.MemTotal)
 
-		Apps, err := exec.Command("bash", "-c", fmt.Sprintf("ls %s|wc -l", MANIFEST)).Output()
+		var AppList []string
+		dirlist, err := ioutil.ReadDir(MANIFEST)
 		if err != nil {
 			return err
+		}
+		for _, v := range dirlist {
+			AppList = append(AppList, v.Name())
 		}
 
 		Ver, err := exec.Command("bash", "-c", "cat /usr/local/edgescale/conf/edgescale-version").Output()
@@ -208,9 +216,9 @@ func InitAgent() error {
 		}
 
 		CPUPct := fmt.Sprintf("%.1f%%", CPUUsedPct)
+		CPUNum, CPUFreq := GetCpuInfo()
 		MemPct := fmt.Sprintf("%.1f%%", MemUsedPct)
-		AppNum := fmt.Sprintf("%s", Apps)
-		AppNum = strings.Replace(AppNum, "\n", "", -1)
+		AppNum := fmt.Sprintf("%d", len(AppList))
 		EsVer := fmt.Sprintf("%s", Ver)
 		EsVer = strings.Replace(EsVer, "\n", "", -1)
 		DskStat := GetDiskUsageStat()
@@ -218,8 +226,12 @@ func InitAgent() error {
 			ID:        device_id,
 			Timestamp: time.Now().Format(time.RFC3339),
 			CPUUsage:  CPUPct,
+			CPUNum:    CPUNum,
+			CPUFreq:   CPUFreq,
+			MemTotal:  sysstat.Mem.MemTotal,
 			MemUsage:  MemPct,
 			AppNumber: AppNum,
+			AppList:   AppList,
 			EsVersion: EsVer,
 			IpAddr:    GetLocalIp(),
 			DiskFree:  DskStat.DskFree,
@@ -251,6 +263,27 @@ func GetDiskUsageStat() DiskStat {
 	du.DskFree = strconv.FormatUint(u.Free/1024/1024/1024, 10) + " GB"
 	du.DskUsed = strconv.FormatUint(u.Used/1024/1024/1024, 10) + " GB"
 	return du
+}
+
+func GetCpuInfo() (int, int) {
+	cpunum := 0
+	cpufreq := 0
+
+	cores, err := exec.Command("bash", "-c", fmt.Sprintf("cat /sys/devices/system/cpu/online")).Output()
+	if err == nil && len(cores) >= 3 {
+		if n, err := strconv.Atoi(string(cores[2])); err == nil {
+			cpunum = n + 1
+		}
+	}
+
+	freq, err := exec.Command("bash", "-c", fmt.Sprintf("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")).Output()
+	if err == nil {
+		if f, err := strconv.Atoi(string(freq[:len(freq)-1])); err == nil {
+			cpufreq = f
+		}
+	}
+
+	return cpunum, cpufreq
 }
 
 func InitFlags() Config {
