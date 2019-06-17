@@ -50,13 +50,15 @@ get_imageURL(){
 
 download_images(){
 	feedback_status "ota-fetch"
-	download_path=/updateImages
+	download_path=/Imagebackup/updateImages
 	mkdir -p ${download_path}
-
+	if [ -e ${download_path}/full_images_deploy* ];then
+		rm -f ${download_path}/full_images_deploy*
+	fi
 	count=0
 	while [ $count -le 5 ]
 	do
-		wget -O /updateImages/full_images.tgz -c $imageURL
+		wget -O ${download_path}/full_images_deploy.tgz -c $imageURL
 		if [ $? != 0 ];then
 			((count++))
 			echo "retrying $count times"

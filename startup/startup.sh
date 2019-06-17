@@ -23,6 +23,10 @@ push_publicip() {
 cd /usr/local/edgescale/bin/
 mkdir -p /data
 
+backuppartition=/Imagebackup
+mkdir -p $backuppartition
+mount -o loop /dev/mmcblk0p3 $backuppartition
+
 ./env.sh
 start-stop-daemon --start --startas /usr/local/edgescale/bin/es-watchdog --name es-watchdog -m --pidfile /var/run/es-watchdog.pid -b
 start-stop-daemon --start --startas /bin/tee-supplicant --name tee-supplicant -m --pidfile /var/run/tee-supplicant.pid -b
