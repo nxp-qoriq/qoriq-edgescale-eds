@@ -50,7 +50,7 @@ get_imageURL(){
 
 download_images(){
 	feedback_status "ota-fetch"
-	download_path=/Imagebackup/updateImages
+	download_path=/backup/updateImages
 	mkdir -p ${download_path}
 	if [ -e ${download_path}/full_images_deploy* ];then
 		rm -f ${download_path}/full_images_deploy*
