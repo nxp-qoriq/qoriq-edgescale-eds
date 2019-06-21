@@ -45,7 +45,8 @@ enum sk_status_code sk_its(char *its)
         ret = -errno;
         goto err1;
     }
-    sprintf(its, "%.8x", *((int *)(ptr + 0x200)));
+    for (int i=0; i<4; i++)
+    its += sprintf(its, "%.2x", *((uint8_t *)(ptr + 0x200) + i));
 
     ret = SK_SUCCESS;
     munmap(ptr, 4096);
@@ -54,6 +55,38 @@ err1:
 err:
     return ret;
 }
+
+enum sk_status_code sk_snvs(char *snvs)
+{
+    uint32_t ret = SK_FAILURE;
+    int mem;
+    void *ptr;
+
+    if ((mem = open ("/dev/mem", O_RDWR | O_SYNC)) == -1) {
+        printf("Cannot open /dev/mem\n");
+        perror("open");
+        ret = -errno;
+        goto err;
+    }
+
+    ptr = mmap (0, 0x11000, PROT_READ|PROT_WRITE, MAP_SHARED, mem, SFP_BASE_ADDRESS);
+    if(ptr == (void *) -1) {
+        printf("Memory map failed.\n");
+        perror("mmap");
+        ret = -errno;
+        goto err1;
+    }
+    for (int i=0; i<4; i++)
+    snvs += sprintf(snvs, "%.2x", *((uint8_t *)(ptr + 0x10014) + i));
+
+    ret = SK_SUCCESS;
+    munmap(ptr, 0x11000);
+err1:
+    close(mem);
+err:
+    return ret;
+}
+
 */
 import "C"
 
@@ -70,9 +103,15 @@ func GetPlatform() string {
 	}
 	var d = make([]byte, 100)
 	n, _ := fd.Read(d)
-	platform := strings.Split(string(d[:n]), ",")
-	if len(platform) > 1 {
-		return platform[1]
+	if n > 0 {
+		for i, v := range d {
+			if v == 0 {
+				platform := strings.Split(string(d[:i]), ",")
+				if len(platform) > 1 {
+					return platform[1]
+				}
+			}
+		}
 	}
 	return ""
 
@@ -84,7 +123,20 @@ func SK_ITS() bool {
 		C.sk_its(c_its)
 		defer C.free(unsafe.Pointer(c_its))
 		its := C.GoString(c_its)
-		if its[1] == '4' {
+		if its[7] == '4' {
+			return true
+		}
+	}
+	return false
+}
+
+func SK_SNVS() bool {
+	if strings.HasPrefix(GetPlatform(), "ls") {
+		c_snvs := C.CString("00000000")
+		C.sk_snvs(c_snvs)
+		defer C.free(unsafe.Pointer(c_snvs))
+		snvs := C.GoString(c_snvs)
+		if snvs[1] == '0' {
 			return true
 		}
 	}
