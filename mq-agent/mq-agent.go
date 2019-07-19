@@ -130,6 +130,8 @@ func InitAgent() error {
 
 	defer client.Disconnect(3)
 
+	go MqGatewayMain(client)  /* forward json between gateway and cloud */
+
 	if token := client.Subscribe(topic, 2, func(client mqtt.Client, msg mqtt.Message) {
 		var m Msg
 		json.Unmarshal(msg.Payload(), &m)
@@ -175,6 +177,19 @@ func InitAgent() error {
 	if token := client.Subscribe(fmt.Sprintf("edgescale/kube/devices/%s", device_id), 2, MqAppHandler); token.Wait() && token.Error() != nil {
 		log.Info("Subscribe error: ", token.Error())
 		return token.Error()
+	}
+
+	var topic_array = []string{REG_RET_TOPIC, SET_TOPIC, GET_TOPIC, OTA_TOPIC}
+	for idx, topic := range topic_array {
+		if idx > 0 {
+			break
+		}
+		fmt.Printf("agent subscribe topic%d:%s\n", idx, topic)
+		token := client.Subscribe(topic, 2, MqRecvCloudCallback)
+		if token.Wait(); token.Error() != nil {
+			log.Info("Subscribe error: ", token.Error())
+			return token.Error()
+		}
 	}
 
 	go func() {
