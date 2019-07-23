@@ -20,5 +20,6 @@ install:
 	sudo cp -r ota-statuscheck $(INSTALL_DIR)/usr/local/edgescale/bin/
 	sudo cp -f mmc-check.sh $(INSTALL_DIR)/usr/local/edgescale/bin/
 	sudo cp -f factory_reset.sh $(INSTALL_DIR)/usr/local/edgescale/bin/
+	sudo cp -f device-reboot.sh $(INSTALL_DIR)/usr/local/edgescale/bin/
 
 .PHONY: clean install
