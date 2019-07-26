@@ -24,11 +24,11 @@ var gateway_client mqtt.Client
 var agent_client mqtt.Client
 var logger = logrus.New()
 var loop_flag bool = true
+var agent_log *logrus.Logger = nil
 
 var ADDRESS string = "127.0.0.1:1883"
 var ACCESS_KEY string = ""
 var DEVICE_ID string = ""
-var CLIENTID string = "Mq_Gateway_Forward_id0"
 
 var BASE_TOPIC string = "/edgescale"
 var REG_TOPIC string = ""
@@ -47,7 +47,7 @@ type MqMsgHeader struct {
 	Time    string `json:"utctime"`
 }
 
-func InitLogFile() (retfd *os.File, reterr error) {
+func InitLogFile() (*os.File, error) {
 	logger.SetLevel(logrus.Level(6))
 	logger.Out = os.Stdout
 
@@ -69,33 +69,50 @@ func InitLogFile() (retfd *os.File, reterr error) {
 	return fd, nil
 }
 
-func MqInitVariable() error {
-	ACCESS_KEY = "access_key0"
-	DEVICE_ID = "i.MX-RT_id0"
+func MqLogInfo(info string, logFlag bool) error {
+	fmt.Printf("\n%s\n", info)
 
-	REG_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/register"
-	REG_RET_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/register/result"
+	if logFlag {
+		logger.Info(info)
 
-	SET_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/set"
-	SET_RET_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/set/result"
-
-	GET_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/get"
-	GET_RET_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/get/result"
-
-	OTA_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/ota"
-	OTA_RET_TOPIC = BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID + "/thing/ota/result"
+		if agent_log != nil {
+			agent_log.Info(info)
+		}
+	}
 
 	return nil
 }
 
-func InitMqttClient(device_id string) (mqcli mqtt.Client, err error) {
+func MqInitVariable() error {
+	ACCESS_KEY = os.Getenv("ES_ACCESSKEY")
+	DEVICE_ID = os.Getenv("ES_DEVICEID")
+
+	fmt.Printf("access_key:%s device_id:%s\n", ACCESS_KEY, DEVICE_ID)
+
+	basetopic := BASE_TOPIC + "/" + ACCESS_KEY + "/" + DEVICE_ID
+
+	REG_TOPIC = basetopic + "/thing/register"
+	REG_RET_TOPIC = basetopic + "/thing/register/result"
+
+	SET_TOPIC = basetopic + "/thing/set"
+	SET_RET_TOPIC = basetopic + "/thing/set/result"
+
+	GET_TOPIC = basetopic + "/thing/get"
+	GET_RET_TOPIC = basetopic + "/thing/get/result"
+
+	OTA_TOPIC = basetopic + "/thing/ota"
+	OTA_RET_TOPIC = basetopic + "/thing/ota/result"
+
+	return nil
+}
+
+func InitMqttClient(device_id string) (mqtt.Client, error) {
 	opts := &mqtt.ClientOptions{
 		ClientID:       device_id,
 		PingTimeout:    time.Second * 30,
 		ConnectTimeout: time.Second * 30,
 		AutoReconnect:  true,
 		KeepAlive:      60,
-		//		TLSConfig:      &tlsConfig,
 	}
 
 	MQTTURL := fmt.Sprint("tcp://", ADDRESS)
@@ -113,7 +130,7 @@ func InitMqttClient(device_id string) (mqcli mqtt.Client, err error) {
 	var topic_array = []string{REG_TOPIC, SET_RET_TOPIC, GET_RET_TOPIC, OTA_RET_TOPIC}
 	for idx, topic := range topic_array {
 		fmt.Printf("gateway subscribe topic%d:%s\n", idx, topic)
-		token := client.Subscribe(topic, 1, MqRecvGwCallback)
+		token := client.Subscribe(topic, 2, MqRecvGwCallback)
 		if token.Wait(); token.Error() != nil {
 			logger.Info("Subscribe error: ", token.Error())
 			return client, token.Error()
@@ -134,54 +151,68 @@ func MqRecvGwCallback(mqcli mqtt.Client, msg mqtt.Message) {
 	var topic = ""
 	var mqj MqMsgHeader
 
-	logger.Debugf("MqRecvGwCallback topic recvd: %s", msg.Topic())
-	fmt.Printf("topic:%s message recvd: %s\n", msg.Topic(), string(msg.Payload()))
-
 	opts := mqcli.OptionsReader()
 	device_id := opts.ClientID()
-	fmt.Printf("devid:%s\n", device_id)
+
+	logInfo := fmt.Sprintf("**MqRecvGwCallback topic:%s devid:%s message:", msg.Topic(), device_id)
+	MqLogInfo(logInfo, true)
+
+	logInfo = fmt.Sprintf("%s", string(msg.Payload()))
+	MqLogInfo(logInfo, false)
 
 	err := json.Unmarshal(msg.Payload(), &mqj)
 	if err != nil {
-		fmt.Printf("recvd topic:%s err:%s\n", mqj.Topic, err)
+		logInfo := fmt.Sprintf("**recvd topic:%s err:%s", mqj.Topic, err)
+		MqLogInfo(logInfo, true)
 		return
 	}
 
-	fmt.Printf("MqRecvGwCallback topic:%s ver:%s msgid:%s time:%s\n", mqj.Topic, mqj.Version, mqj.Msgid, mqj.Time)
+	logInfo = fmt.Sprintf("**topic:%s ver:%s msgid:%s time:%s", mqj.Topic, mqj.Version, mqj.Msgid, mqj.Time)
+	MqLogInfo(logInfo, true)
 
 	switch mqj.Topic {
 	case "register":
-		fmt.Printf("received register\n")
 		topic = REG_TOPIC
 
 	case "set_result":
-		fmt.Printf("received set_result\n")
 		topic = SET_RET_TOPIC
 
 	case "get_result":
-		fmt.Printf("received get_result\n")
 		topic = GET_RET_TOPIC
 
 	case "ota_result":
-		fmt.Printf("received ota_result\n")
 		topic = OTA_RET_TOPIC
 
 	default:
-		fmt.Printf("received unknown topic:\"%s\"\n", mqj.Topic)
+		logInfo = fmt.Sprintf("**received unknown topic:%s", mqj.Topic)
+		MqLogInfo(logInfo, true)
 	}
 
 	if topic != "" {
 		MqForwardToCloud(topic, msg.Payload())
+
+		logInfo = fmt.Sprintf("**MqRecvGwCallback -> MqForwardToCloud topic:%s", topic)
+		MqLogInfo(logInfo, true)
 	}
 }
 
 func MqConnLostHandler(c mqtt.Client, err error) {
 	fmt.Printf("MQTT Connection lost, reason: %v\n", err)
-	c.Disconnect(1000)
+	c.Disconnect(10)
 }
 
 func MqForwardToCloud(topic string, msg []byte) error {
 	cli := agent_client
+	if cli == nil {
+		fmt.Printf("mqtt agent_client is nil\n")
+		return nil
+	}
+
+	if !cli.IsConnectionOpen() {
+		fmt.Printf("mqtt agent_client lost connection\n")
+		return nil
+	}
+
 	token := cli.Publish(topic, 0, false, msg)
 	if token.Wait(); token.Error() != nil {
 		return token.Error()
@@ -192,6 +223,12 @@ func MqForwardToCloud(topic string, msg []byte) error {
 
 func MqForwardToGateway(topic string, msg []byte) error {
 	cli := gateway_client
+
+	if !cli.IsConnectionOpen() {
+		fmt.Printf("mqtt gateway_client lost connection\n")
+		return nil
+	}
+
 	token := cli.Publish(topic, 0, false, msg)
 	if token.Wait(); token.Error() != nil {
 		return token.Error()
@@ -211,58 +248,61 @@ func MqRecvCloudCallback(mqcli mqtt.Client, msg mqtt.Message) {
 	var topic = ""
 	var mqj MqMsgHeader
 
-	logger.Debugf("MqRecvCloudCallback topic recvd: %s", msg.Topic())
-	fmt.Printf("topic:%s message recvd: %s\n", msg.Topic(), string(msg.Payload()))
-
 	opts := mqcli.OptionsReader()
 	device_id := opts.ClientID()
-	fmt.Printf("devid:%s\n", device_id)
+
+	logInfo := fmt.Sprintf("--MqRecvCloudCallback topic:%s devid:%s message:", msg.Topic(), device_id)
+	MqLogInfo(logInfo, true)
+
+	logInfo = fmt.Sprintf("%s", string(msg.Payload()))
+	MqLogInfo(logInfo, false)
 
 	err := json.Unmarshal(msg.Payload(), &mqj)
 	if err != nil {
-		fmt.Printf("recvd topic:%s err:%s\n", mqj.Topic, err)
+		logInfo = fmt.Sprintf("--recvd topic:%s err:%s", mqj.Topic, err)
+		MqLogInfo(logInfo, true)
 		return
 	}
 
-	fmt.Printf("MqRecvCloudCallback topic:%s ver:%s msgid:%s time:%s\n", mqj.Topic, mqj.Version, mqj.Msgid, mqj.Time)
+	logInfo = fmt.Sprintf("--topic:%s ver:%s msgid:%s time:%s", mqj.Topic, mqj.Version, mqj.Msgid, mqj.Time)
+	MqLogInfo(logInfo, true)
 
 	switch mqj.Topic {
 	case "register_result":
-		fmt.Printf("received register\n")
 		topic = REG_RET_TOPIC
 
 	case "set":
-		fmt.Printf("received set_result\n")
 		topic = SET_TOPIC
 
 	case "get":
-		fmt.Printf("received get_result\n")
 		topic = GET_TOPIC
 
 	case "ota":
-		fmt.Printf("received ota_result\n")
 		topic = OTA_TOPIC
 
 	default:
-		fmt.Printf("received unknown topic:\"%s\"\n", mqj.Topic)
+		logInfo = fmt.Sprintf("--received unknown topic:%s", mqj.Topic)
+		MqLogInfo(logInfo, true)
 	}
 
 	if topic != "" {
 		MqForwardToGateway(topic, msg.Payload())
+
+		logInfo = fmt.Sprintf("--MqRecvCloudCallback -> MqForwardToGateway topic:%s", topic)
+		MqLogInfo(logInfo, true)
 	}
 }
 
-func MqGatewayMain(cli mqtt.Client) {
+func MqGatewayMain(cli mqtt.Client, log *logrus.Logger) {
 	agent_client = cli
+	agent_log = log
 
 	fd, err := InitLogFile()
 	if err != nil {
 		fmt.Println("InitLogFile err:%s", err)
 	}
 
-	MqInitVariable()
-
-	mqclient, err := InitMqttClient(CLIENTID)
+	mqclient, err := InitMqttClient(DEVICE_ID)
 	gateway_client = mqclient
 
 	defer fd.Close()

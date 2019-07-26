@@ -130,7 +130,8 @@ func InitAgent() error {
 
 	defer client.Disconnect(3)
 
-	go MqGatewayMain(client)  /* forward json between gateway and cloud */
+	MqInitVariable()
+	go MqGatewayMain(client, log) /* forward json between gateway and cloud */
 
 	if token := client.Subscribe(topic, 2, func(client mqtt.Client, msg mqtt.Message) {
 		var m Msg
