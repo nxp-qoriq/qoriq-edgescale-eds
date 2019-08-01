@@ -166,8 +166,13 @@ func InitAgent() error {
 		case "factory_reset":
 			cmd := fmt.Sprintf("/usr/local/edgescale/bin/factory_reset.sh")
 			exec.Command("bash", "-c", cmd).Output()
-		case "reboot":
-			cmd := fmt.Sprintf("reboot")
+		case "device_reset":
+			log.Println("Unenroll device ota-info")
+			cmd := fmt.Sprintf("dd if=/dev/zero of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync&&reboot")
+			exec.Command("bash", "-c", cmd).Output()
+		case "device_reboot":
+			log.Println("Reboot device: ", m.Mid)
+			cmd := fmt.Sprintf("/usr/local/edgescale/bin/device-reboot %s", m.Mid)
 			exec.Command("bash", "-c", cmd).Output()
 		}
 	}); token.Wait() && token.Error() != nil {
