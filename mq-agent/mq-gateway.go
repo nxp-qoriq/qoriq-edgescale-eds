@@ -129,7 +129,8 @@ func InitMqttClient(device_id string) (mqtt.Client, error) {
 
 	var topic_array = []string{REG_TOPIC, SET_RET_TOPIC, GET_RET_TOPIC, OTA_RET_TOPIC}
 	for idx, topic := range topic_array {
-		fmt.Printf("gateway subscribe topic%d:%s\n", idx, topic)
+		logInfo := fmt.Sprintf("gateway subscribe topic%d:%s", idx, topic)
+		MqLogInfo(logInfo, true)
 		token := client.Subscribe(topic, 2, MqRecvGwCallback)
 		if token.Wait(); token.Error() != nil {
 			logger.Info("Subscribe error: ", token.Error())
