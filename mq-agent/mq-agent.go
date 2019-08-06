@@ -187,10 +187,8 @@ func InitAgent() error {
 
 	var topic_array = []string{REG_RET_TOPIC, SET_TOPIC, GET_TOPIC, OTA_TOPIC}
 	for idx, topic := range topic_array {
-		if idx > 0 {
-			break
-		}
 		fmt.Printf("agent subscribe topic%d:%s\n", idx, topic)
+		log.Info("agent subscribe topic: ", topic)
 		token := client.Subscribe(topic, 2, MqRecvCloudCallback)
 		if token.Wait(); token.Error() != nil {
 			log.Info("Subscribe error: ", token.Error())
