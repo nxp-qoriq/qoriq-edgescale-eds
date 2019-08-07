@@ -274,13 +274,28 @@ func GetLocalIp() string {
 }
 
 func GetDiskUsageStat() DiskStat {
-	u, err := disk.Usage("/")
+	u, err := disk.Usage("/backup")
 	if err != nil {
 		panic(err)
 	}
 	du := DiskStat{}
-	du.DskFree = strconv.FormatUint(u.Free/1024/1024/1024, 10) + " GB"
-	du.DskUsed = strconv.FormatUint(u.Used/1024/1024/1024, 10) + " GB"
+	switch {
+        case u.Free >= 1024*1024*1024:
+                du.DskFree = fmt.Sprintf("%s GB", strconv.FormatFloat(float64(u.Free)/1024/1024/1024, 'f', 1, 64))
+        case u.Free >= 1024*1024:
+                du.DskFree = fmt.Sprintf("%s MB", strconv.FormatUint(u.Free/1024/1024, 10))
+        default:
+                du.DskFree = fmt.Sprintf("%s KB", strconv.FormatUint(u.Free/1024, 10))
+        }
+
+	switch {
+        case u.Used >= 1024*1024*1024:
+                du.DskUsed = fmt.Sprintf("%s GB", strconv.FormatFloat(float64(u.Used)/1024/1024/1024, 'f', 1, 64))
+        case u.Used >= 1024*1024:
+                du.DskUsed = fmt.Sprintf("%s MB", strconv.FormatUint(u.Used/1024/1024, 10))
+        default:
+                du.DskUsed = fmt.Sprintf("%s KB", strconv.FormatUint(u.Used/1024, 10))
+        }
 	return du
 }
 
