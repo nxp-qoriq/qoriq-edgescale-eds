@@ -1,6 +1,6 @@
 #####################################
 #
-# Copyright 2017-2018 NXP
+# Copyright 2017-2019 NXP
 #
 #####################################
 
@@ -20,7 +20,7 @@ GOBUILDTAGS ?= default
 
 
 all:
-	if [ -n "$(http_proxy)" ]; then export no_proxy=$(no_proxy),gopkg.in; fi && \
+	@if [ -n "$(http_proxy)" ] && ! echo $(http_proxy) | grep 127.0.0.1; then export no_proxy=$(no_proxy),gopkg.in; fi && \
 	go get github.com/edgeiot/est-client-go && \
 	go get gopkg.in/yaml.v2
 	env CGO_ENABLED=1 GOOS=linux GOARCH=${ARCH} CC=${CC} CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}" go build -o cert-agent --ldflags="-w -s" --tags "${GOBUILDTAGS}"
