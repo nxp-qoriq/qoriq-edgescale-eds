@@ -24,6 +24,10 @@ cd /usr/local/edgescale/bin/
 mkdir -p /data
 
 ./env.sh
+
+# install mosquitto
+[ -e /etc/init.d/mosquitto ]||(apt install mosquitto && /etc/init.d/mosquitto start)
+
 start-stop-daemon --start --startas /usr/local/edgescale/bin/es-watchdog --name es-watchdog -m --pidfile /var/run/es-watchdog.pid -b
 start-stop-daemon --start --startas /bin/tee-supplicant --name tee-supplicant -m --pidfile /var/run/tee-supplicant.pid -b
 ./cert-agent
