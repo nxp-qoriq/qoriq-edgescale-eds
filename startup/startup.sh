@@ -6,6 +6,8 @@
 
 #!/bin/bash
 
+echo 'V' > /dev/watchdog
+
 export version=`cat /usr/local/edgescale/conf/edgescale-version`
 
 push_publicip() {

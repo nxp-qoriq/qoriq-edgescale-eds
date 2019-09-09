@@ -52,8 +52,8 @@ download_images(){
 	feedback_status "ota-fetch"
 	download_path=/backup/updateImages
 	mkdir -p ${download_path}
-	if [ -e ${download_path}/full_images_deploy* ];then
-		rm -f ${download_path}/full_images_deploy*
+	if [ -e ${download_path}/full_images_deploy.tgz ];then
+		mv ${download_path}/full_images_deploy.tgz ${download_path}/full_images_deploy_old.tgz
 	fi
 	count=0
 	while [ $count -le 5 ]
@@ -90,7 +90,7 @@ if [ $imageURL ];then
 
 	download_images
 	if [ $? -eq 0 ];then
-		updateStatus=8
+		updateStatus=4
 		echo "$updateStatus $platform $oldimageVersion $newimageVersion $solutionname $solutionid $autoOta $mid" > /tmp/ota-info
 		dd if=/tmp/ota-info of=/dev/mmcblk0 bs=512 seek=129024 count=1 conv=sync
 		sleep 5
