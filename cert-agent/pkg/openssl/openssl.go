@@ -1,4 +1,4 @@
-// +build secure
+// +build secure se
 
 /*
  **********************************
@@ -15,7 +15,7 @@ package openssl
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
 
-ENGINE *C_Sobj_Engine_Init() {
+ENGINE *C_Sobj_Engine_Init(char* path) {
 	ENGINE * eng;
 	const char *engine_id = "dynamic";
 
@@ -24,9 +24,7 @@ ENGINE *C_Sobj_Engine_Init() {
 	if (!eng) {
 		printf("ENGINE_by_id failed\n");
 	}
-	ENGINE_ctrl_cmd_string(eng, "SO_PATH",
-		"/usr/lib/aarch64-linux-gnu/openssl-1.0.0/engines/libeng_secure_obj.so", 0);
-	ENGINE_ctrl_cmd_string(eng, "ID", "eng_secure_obj", 0);
+	ENGINE_ctrl_cmd_string(eng, "SO_PATH", path, 0);
 	ENGINE_ctrl_cmd_string(eng, "LOAD", NULL, 0);
 	return eng;
 }
@@ -46,7 +44,10 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"unsafe"
 )
+
+var EnginePath = ""
 
 type OpensslPrivateKey struct {
 	Key string
@@ -55,13 +56,21 @@ type OpensslPrivateKey struct {
 type ENGINE *C.ENGINE
 
 func Sobj_Init() *C.ENGINE {
-	eng := C.C_Sobj_Engine_Init()
+	cPath := C.CString(EnginePath)
+	defer C.free(unsafe.Pointer(cPath))
+	eng := C.C_Sobj_Engine_Init(cPath)
 	return eng
 }
 
 func (eng *C.ENGINE) Sobj_Loadkey(key string) (crypto.PrivateKey, error) {
 	pub, err := ExportRSAPublicKey(eng, key)
 	priv := &OpensslPrivateKeyRSA{OpensslPrivateKey{key, eng}, pub}
+	return priv, err
+}
+
+func (eng *C.ENGINE) Sobj_LoadECkey(key string) (crypto.PrivateKey, error) {
+	pub, err := ExportECDSAPublicKey(key)
+	priv := &OpensslPrivateKeyECDSA{OpensslPrivateKey{key, eng}, pub}
 	return priv, err
 }
 
@@ -133,8 +142,14 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte, keyfile string) (tls.Certific
 				return fail(err)
 			}
 		}
+	case "EC PRIVATE KEY":
+		eng := Sobj_Init()
+		cert.PrivateKey, err = eng.Sobj_LoadECkey(keyfile)
+		if err != nil {
+			return fail(err)
+		}
 	default:
-		fmt.Println("Unsupported key type %q", keyDERBlock.Type)
+		fmt.Println("Unsupported key type: ", keyDERBlock.Type)
 
 	}
 
@@ -162,6 +177,10 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte, keyfile string) (tls.Certific
 		} else {
 			return fail(errors.New("key type does not match"))
 		}
+	case *ecdsa.PublicKey:
+		//EC Key, TBD.
+		//h := []byte{45, 113, 22, 66, 183, 38, 176, 68, 1, 98, 124, 169, 251, 172, 50, 245, 200, 83, 15, 177, 144, 60, 196, 219, 2, 37, 135, 23, 146, 26, 72, 129}
+		//s, err := cert.PrivateKey.(crypto.Signer).Sign(rand.Reader, h, crypto.SHA256)
 	default:
 		return fail(errors.New("unknown public key algorithm"))
 	}

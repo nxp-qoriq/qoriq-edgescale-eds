@@ -34,6 +34,7 @@ var log = logrus.New()
 
 type Config struct {
 	LogLevel *int
+	Engine   *string
 }
 
 type Msg struct {
@@ -323,13 +324,14 @@ func GetCpuInfo() (int, int) {
 func InitFlags() Config {
 	cfg := Config{}
 	cfg.LogLevel = flag.Int("d", 4, "logging levels 0-5")
+	cfg.Engine = flag.String("engine", "/usr/lib/aarch64-linux-gnu/openssl-1.0.0/engines/libeng_secure_obj.so", "Use openssl engine, possibly a hardware device, default is nxp secure object engine")
 	flag.Parse()
 	return cfg
 }
 
 func main() {
 	cfg := InitFlags()
-
+	openssl.EnginePath = *cfg.Engine
 	log.SetLevel(logrus.Level(*cfg.LogLevel))
 	log.Out = os.Stdout
 	_, err := os.Stat("/var/log/edgescale")

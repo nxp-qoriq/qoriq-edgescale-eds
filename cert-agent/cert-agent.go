@@ -40,7 +40,7 @@ type Config struct {
 	SecureLevel *int
 	Version     string
 	Config      *string
-	URI         string
+	URI         *string
 	DeviceID    string
 	APIURI      string `json:"api_uri"`
 	TrustChain  string `json:"trust_chain"`
@@ -48,6 +48,7 @@ type Config struct {
 	Dev         *string
 	DevAddr     *int
 	ReNew       *bool
+	Engine      *string
 }
 
 type Token struct {
@@ -56,11 +57,13 @@ type Token struct {
 	URI        string `json:"ca_uri"`
 	TrustChain string `json:"trust_chain"`
 	Model      string `json:"device_model"`
+	Message    string `json:"message"`
 }
 
 type Challenge struct {
 	Device_ID string `json:"device_id"`
 	Challenge string `json:"challenge"`
+	Message   string `json:"message"`
 }
 
 var (
@@ -75,6 +78,8 @@ func InitFlags() {
 	cfg.DevAddr = flag.Int("devaddr", 62, "secure firmware offset, default is 62")
 	cfg.Config = flag.String("config", "/usr/local/edgescale/conf/config.yml", "edgescale config file")
 	cfg.ReNew = flag.Bool("renew", false, "renew the certificateRequest")
+	cfg.Engine = flag.String("engine", "/usr/lib/aarch64-linux-gnu/openssl-1.0.0/engines/libeng_secure_obj.so", "Use openssl engine, possibly a hardware device, default is nxp secure object engine")
+	cfg.URI = flag.String("ca", "", "edgescale ca server, eg: htps://int.b-est.edgescale.org")
 	flag.Parse()
 }
 
@@ -224,21 +229,18 @@ func Get_pin() string {
 }
 
 func GetOEMID() string {
-	if oemID, _ := sk.SK_oemid(); oemID != "0000000000000000000000000000000000000000" {
-		return oemID[:6]
+	if sk.SK_ITS() {
+		oemID, _ := sk.SK_oemid()
+		return oemID
 	}
 	b, err := ioutil.ReadFile("/data/device-id.ini")
 	if err != nil {
 		return ""
 	}
 	if o := strings.Split(strings.Trim(string(b), "\n"), ":"); len(o) > 1 {
-		if len(o[1]) >= 6 {
-			return o[1][:6]
-		} else {
-			return o[1]
-		}
+		return o[1]
 	}
-	return "000000"
+	return "0000000000000000000000000000000000000000"
 }
 
 func phase2() (string, string, string, string) {
@@ -308,7 +310,7 @@ func phase2() (string, string, string, string) {
 		}
 	}
 
-	return device_id, device_model, e_token, cfg.URI
+	return device_id, device_model, e_token, *cfg.URI
 }
 
 func Get_EToken(device_id string, signed interface{}) (string, string) {
@@ -339,10 +341,10 @@ func Get_EToken(device_id string, signed interface{}) (string, string) {
 	var t Token
 	json.Unmarshal(bs, &t)
 	if t.E_Token == "" {
-		fmt.Println("No valid e_token")
+		fmt.Println("No valid e_token,", t.Message)
 	}
 	resp.Body.Close()
-	cfg.URI = t.URI
+	*cfg.URI = t.URI
 	cfg.TrustChain = t.TrustChain
 	cfg.APIURI = t.APIURI
 
@@ -383,7 +385,7 @@ func Get_challenge(signed interface{}, mp string, msg string) (string, string) {
 	err = json.Unmarshal(bs, &c)
 
 	if c.Challenge == "" {
-		fmt.Println("No valid challenge code")
+		fmt.Println("No valid challenge code,", c.Message)
 	}
 
 	pin := Get_pin()
@@ -414,15 +416,15 @@ func getEdgeScaleConfig(deviceID string) {
 	oemID := GetOEMID()
 	nextProto := fmt.Sprintf("x-es-%s-est-ca", oemID)
 	tlsConfig.NextProtos = []string{nextProto}
-	if cfg.URI == "" {
+	if *cfg.URI == "" {
 		b, _ := pem.Decode(certPEMBlock)
 		c, _ := x509.ParseCertificate(b.Bytes)
 		u, _ := url.Parse(c.OCSPServer[0])
-		cfg.URI = fmt.Sprintf("https://%s", u.Host)
+		*cfg.URI = fmt.Sprintf("https://%s", u.Host)
 		cfg.DeviceID = c.Subject.CommonName
 	}
 
-	url := fmt.Sprintf("%s/.well-known/jwt", cfg.URI)
+	url := fmt.Sprintf("%s/.well-known/jwt", *cfg.URI)
 	tr := &http.Transport{
 		TLSClientConfig: &tlsConfig,
 	}
@@ -498,9 +500,7 @@ func enroll() error {
 	emailAddress := ""
 
 	b, err := base64.RawStdEncoding.DecodeString(cfg.TrustChain)
-	if err != nil {
-		ioutil.WriteFile("/data/certs/rootCA.pem", b, 0400)
-	}
+	ioutil.WriteFile("/data/certs/rootCA.pem", b, 0400)
 	serverCA, _ := ioutil.ReadFile("/data/certs/rootCA.pem")
 
 	//E-EST certs
@@ -576,6 +576,7 @@ func main() {
 		esconf.API = "https://api.edgescale.org/v1"
 	}
 	InitFlags()
+	openssl.EnginePath = *cfg.Engine
 	if sk.SK_ITS() && *cfg.SecureLevel < 2 {
 		*cfg.SecureLevel = 2
 		cmd := "modprobe securekeydev || reboot"
