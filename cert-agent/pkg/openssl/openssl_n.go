@@ -1,4 +1,4 @@
-// +build !secure
+// +build default
 
 /*
  **********************************
@@ -25,6 +25,8 @@ import (
 	"crypto"
 	"crypto/tls"
 )
+
+var EnginePath = ""
 
 // Not implemented. Reserved for future use.
 func Sobj_Init() *C.ENGINE {
