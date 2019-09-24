@@ -17,7 +17,7 @@ push_publicip() {
 	token=$(cat /data/.edgescale.cred)
 	url="$ES_API_URI/devices/positions"
 	# Create curl body
-	body="{"ip": "$publicip", "device_name": "$ES_DEVICEID"}"
+	body='{"ip": "'$publicip'", "device_name": "'$ES_DEVICEID'"}'
 
 	curl -X POST -H "Content-Type: application/json; verson=$version" -H "access-token: $token" $url -d "$body"
 }
@@ -28,7 +28,7 @@ mkdir -p /data
 ./env.sh
 
 # install mosquitto
-[ -e /etc/init.d/mosquitto ]||(apt install mosquitto && /etc/init.d/mosquitto start)
+[ -e /etc/init.d/mosquitto ]||(apt install -y mosquitto && /etc/init.d/mosquitto start)
 
 start-stop-daemon --start --startas /usr/local/edgescale/bin/es-watchdog --name es-watchdog -m --pidfile /var/run/es-watchdog.pid -b
 start-stop-daemon --start --startas /bin/tee-supplicant --name tee-supplicant -m --pidfile /var/run/tee-supplicant.pid -b

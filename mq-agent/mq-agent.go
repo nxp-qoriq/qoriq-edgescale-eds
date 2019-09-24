@@ -173,7 +173,7 @@ func InitAgent() error {
 			exec.Command("bash", "-c", cmd).Output()
 		case "device_reboot":
 			log.Println("Reboot device: ", m.Mid)
-			cmd := fmt.Sprintf("/usr/local/edgescale/bin/device-reboot %s", m.Mid)
+			cmd := fmt.Sprintf("/usr/local/edgescale/bin/device-reboot.sh %s", m.Mid)
 			exec.Command("bash", "-c", cmd).Output()
 		}
 	}); token.Wait() && token.Error() != nil {
