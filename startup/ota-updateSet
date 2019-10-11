@@ -14,7 +14,7 @@
 #
 #Status=2 Failed start linux on SD card,And it will rollback,get old version image.
 #
-#Status=8 The Solution images download completed,And it will automatically reboot and image installation in bootstrap image.
+#Status=4 The Solution images download completed,And it will automatically reboot and image installation in bootstrap image.
 /usr/local/edgescale/bin/cert-agent
 . /data/config.env
 
@@ -78,7 +78,7 @@ download_images(){
 }
 
 feedback_status(){
-	curl -X POST -H "Content-Type: application/json; version=$version" -H "access-token: $(cat /data/.edgescale.cred)" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":'$mid', "status":"'"$1"'"}'
+	curl -X POST -H "Content-Type: application/json; version=$version" -H "access-token: $(cat /data/.edgescale.cred)" $ES_API_URI/devices/tasks/status -d '{"device":"'$deviceid'", "mid":"'$mid'", "status":"'"$1"'"}'
 }
 
 get_imageURL
