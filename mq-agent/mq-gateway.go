@@ -39,6 +39,7 @@ var GET_TOPIC string = ""
 var GET_RET_TOPIC string = ""
 var OTA_TOPIC string = ""
 var OTA_RET_TOPIC string = ""
+var EVENT_TOPIC string = ""
 
 type MqMsgHeader struct {
 	Topic   string `json:"topic"`
@@ -103,6 +104,8 @@ func MqInitVariable() error {
 	OTA_TOPIC = basetopic + "/thing/ota"
 	OTA_RET_TOPIC = basetopic + "/thing/ota/result"
 
+	EVENT_TOPIC = basetopic + "/thing/event"
+
 	return nil
 }
 
@@ -127,7 +130,7 @@ func InitMqttClient(device_id string) (mqtt.Client, error) {
 		return client, token.Error()
 	}
 
-	var topic_array = []string{REG_TOPIC, SET_RET_TOPIC, GET_RET_TOPIC, OTA_RET_TOPIC}
+	var topic_array = []string{REG_TOPIC, SET_RET_TOPIC, GET_RET_TOPIC, OTA_RET_TOPIC, EVENT_TOPIC}
 	for idx, topic := range topic_array {
 		logInfo := fmt.Sprintf("gateway subscribe topic%d:%s", idx, topic)
 		MqLogInfo(logInfo, true)
@@ -143,8 +146,8 @@ func InitMqttClient(device_id string) (mqtt.Client, error) {
 
 /*
 	when received message(whose topic is "register", "set_result",
-	"get_result" and "ota_result") from gateway(sub-devices) via local-broker,
-	we will forward it to edgescale cloud via agent.
+	"get_result", "ota_result" and "event") from gateway(sub-devices)
+	via local-broker, we will forward it to edgescale cloud via agent.
 
 	Note: mqcli is client handler for local-broker
 */
@@ -183,6 +186,9 @@ func MqRecvGwCallback(mqcli mqtt.Client, msg mqtt.Message) {
 
 	case "ota_result":
 		topic = OTA_RET_TOPIC
+
+	case "event":
+		topic = EVENT_TOPIC
 
 	default:
 		logInfo = fmt.Sprintf("**received unknown topic:%s", mqj.Topic)
