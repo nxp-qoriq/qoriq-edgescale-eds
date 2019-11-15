@@ -25,6 +25,9 @@ push_publicip() {
 cd /usr/local/edgescale/bin/
 mkdir -p /data
 
+# trust the self-signed certificates before the first API call
+update-ca-certificates
+
 ./env.sh
 
 # install mosquitto
@@ -42,11 +45,10 @@ done
 
 if [ -z $ES_OEM_TRUST_CA ] ; then
 		rm -rf /usr/local/share/ca-certificates/es-oem-trust.crt
-		update-ca-certificates
 else
 		echo -n $ES_OEM_TRUST_CA | base64 -d > /usr/local/share/ca-certificates/es-oem-trust.crt
-		update-ca-certificates
 fi
+update-ca-certificates
 
 if [ $? -eq 0 ];then
     # report public IP Address to cloud
