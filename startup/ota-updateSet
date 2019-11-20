@@ -55,22 +55,11 @@ download_images(){
 	if [ -e ${download_path}/full_images_deploy.tgz ];then
 		mv ${download_path}/full_images_deploy.tgz ${download_path}/full_images_deploy_old.tgz
 	fi
-	count=0
-	while [ $count -le 5 ]
-	do
-		wget -O ${download_path}/full_images_deploy.tgz -c $imageURL
-		if [ $? != 0 ];then
-			((count++))
-			echo "retrying $count times"
-			sleep 5
-		else
-			break
-		fi
-	done
-
-	if [ $count -gt 5 ];then
-		return 1
-	elif [ ! -e ${download_path}/*.tgz ];then
+	wget -O ${download_path}/full_images_deploy.tgz -c $imageURL -t 0 -T 300
+	if [ $? != 0 ];then
+		echo "Connection timeout"
+		rm -rf ${download_path}/full_images_deploy.tgz
+		sleep 5
 		return 1
 	else
 		return 0
