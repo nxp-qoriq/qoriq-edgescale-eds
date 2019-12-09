@@ -33,6 +33,7 @@ const (
 	ACTSTATUS = "status"
 	ACTPUTLOG = "putlog"
 	ACTRMIM   = "rmim"
+	ACTSTSUM  = "statsum"
 
 	PENDING  = "pending"
 	CREATING = "creating"
@@ -200,6 +201,11 @@ func GetContainerMesg(puid string) (string, error) {
 func GetContainerLog(pod, container string) ([]byte, error) {
 	url := "https://127.0.0.1:10250/containerLogs/default/"
 	url += pod + "/" + container + "?tail=200"
+	return SendHttpRequest(url, nil, http.MethodGet)
+}
+
+func GetStatSum() ([]byte, error) {
+	url := "https://127.0.0.1:10250/stats/summary"
 	return SendHttpRequest(url, nil, http.MethodGet)
 }
 
@@ -640,6 +646,13 @@ func MqAppHandler(mqcli mqtt.Client, msg mqtt.Message) {
 				return
 			}
 
+		} else if cmdl.Type == ACTSTSUM {
+			mqcmd := cmdl.Items[0]
+			b, _ := GetStatSum()
+			mqcmd.Type = ACTSTSUM
+			mqcmd.Body = string(b)
+			go publish_mesg(mqcli, mqcmd.DeviceId, mqcmd)
+			return
 		} else {
 			go ProcessMqkubecmd(mqcli, device_id, cmdl)
 		}
