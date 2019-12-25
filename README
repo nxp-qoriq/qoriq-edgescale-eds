@@ -4,36 +4,38 @@ The cloud service is located at http://portal.edgescale.org. With the dashboard,
 
 Please follow below instructions to build and deploy software images with LSDK tools.
 
-## To compile custom kernel for EDGESCALE with flexbuild
-
-```
-$  make distclean -C build/linux/kernel/<arch>/output/linux-4.x (optional)        
-$  cp packages/apps/edgescale-eds/edgescale_demo_kernel.config packages/linux/linux/arch/arm64/configs
-$  flex-builder  -c linux  -a <arch>  -B fragment:edgescale_demo_kernel.config
-```
-
 ## To build EDGESCALE-EDS with flexbuild
+EDGESCALE-EDS is not enabled by default in flexbuild, you can enable it by setting the build options below in <flexbuild_dir>/configs/build_lsdk.cfg
 
 ```
-$ flex-builder -i autobuild -a <arch> # autobuild all firmware, linux, apps components and ubuntu rootfs for all arch machines
-$ flex-builder -m ls1046ardb -a arm64 # autobuild all firmware, linux, apps components and ubuntu rootfs for ls1046ardb
-```
-
-## Install LSDK into SD card on target host
-
-```
-$ flex-installer -b build/images/bootpartition_<arch>  -r build/images/ubuntu_xenial_<arch>_rootfs.d  -d /dev/sdx
-```
-
-## Please Note
-
-EDGESCALE-EDS is not enabled by default in flexbuild,if you want to enable it, you need set the below macro to the file flexbuild/configs/build_lsdk.cfg.
-
-```
-ONFIG_BUILD_OPTEE=y
-CONFIG_BUILD_LIBPKCS11=y
-CONFIG_BUILD_SECURE_OBJ=y
-CONFIG_BUILD_QORIQ_EDGESCALE=y
+CONFIG_APP_EDGESCALE=y
+CONFIG_APP_OPTEE=y
+CONFIG_APP_LIBPKCS11=y
+CONFIG_APP_SECURE_OBJ=y
 # Optional (TEE support option)
 CONFIG_EDGESCALE_SECURE_MODE=y
+```
+
+To compile custom kernel for EdgeScale
+```
+$  flex-builder -i clean-linux (optional)
+$  flex-builder -c linux -a arm64
+```
+
+To only build edgescale components:
+```
+$ flex-builder -c edgescale -a arm64
+```
+
+To build all images with Edgescale enabled by autobuild:
+```
+$ flex-builder -i auto -a <arch>   # autobuild all firmware, linux, apps components and ubuntu rootfs for all <arch> machines
+$ flex-builder -m ls1046ardb       # autobuild all firmware, linux, apps components and ubuntu rootfs for ls1046ardb
+```
+
+## To install LSDK with EdgeScale into SD card on host on which SD card is attached
+
+```
+$ cd build/images
+$ flex-installer -b bootpartition_<lts_version>_arm64_edgescale.tgz  -r rootfs_<lsdk_version>_arm64_edgescale.tgz  -d /dev/sdx
 ```
