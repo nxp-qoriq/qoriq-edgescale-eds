@@ -277,7 +277,7 @@ func GetLocalIp() string {
 func GetDiskUsageStat() DiskStat {
 	u, err := disk.Usage("/backup")
 	if err != nil {
-		panic(err)
+		log.Errorln(`"/backup" folder is not found, perhaps create it and run "mount /dev/sdx /backup"`)
 	}
 	du := DiskStat{}
 	switch {
