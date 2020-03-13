@@ -43,6 +43,14 @@ do
 	export ${env}
 done
 
+if [ ! -d /backup ];then
+    mkdir /backup
+    backupPartition=($(ls /dev/mmcblk*p3))
+    if [ -n "${backupPartition[0]}" ]; then
+        mount ${backupPartition[0]} /backup
+    fi
+fi
+
 if [ -z $ES_OEM_TRUST_CA ] ; then
 		rm -rf /usr/local/share/ca-certificates/es-oem-trust.crt
 else
